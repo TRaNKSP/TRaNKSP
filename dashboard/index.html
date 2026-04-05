@@ -1,0 +1,2956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRaNKSP — Short Squeeze Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #090c10;
+  --surface: #0f1318;
+  --surface2: #161b22;
+  --border: #1e2630;
+  --border2: #2a3340;
+  --accent: #00e5ff;
+  --accent2: #ff4d6d;
+  --accent3: #b5ff4d;
+  --accent4: #ffd166;
+  --text: #e8edf3;
+  --text2: #8899aa;
+  --text3: #556677;
+  --font-main: 'Syne', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+  --radius: 6px;
+  --glow: 0 0 20px rgba(0,229,255,0.12);
+  --glow2: 0 0 20px rgba(255,77,109,0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-main);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── HEADER ──────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 28px;
+  height: 60px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.logo span { color: var(--text3); }
+
+.health-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent3);
+  flex-shrink: 0;
+  box-shadow: 0 0 8px var(--accent3);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.header-spacer { flex: 1; }
+
+.header-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text3);
+}
+
+/* ── NAV TABS ─────────────────────────────────────────────── */
+.nav {
+  display: flex;
+  gap: 0;
+  padding: 0 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.nav-tab {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 14px 20px;
+  color: var(--text3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.15s;
+  user-select: none;
+}
+.nav-tab:hover { color: var(--text2); }
+.nav-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── MAIN LAYOUT ──────────────────────────────────────────── */
+.main { padding: 28px; max-width: 1600px; margin: 0 auto; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── SECTION HEADER ───────────────────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.section-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.section-sub {
+  font-size: 12px;
+  color: var(--text3);
+  font-family: var(--font-mono);
+}
+.section-header .spacer { flex: 1; }
+
+/* ── BUTTONS ──────────────────────────────────────────────── */
+.btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 9px 18px;
+  border-radius: var(--radius);
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  font-weight: 700;
+}
+.btn-primary:hover { opacity: 0.85; box-shadow: var(--glow); }
+.btn-danger {
+  background: transparent;
+  color: var(--accent2);
+  border-color: var(--accent2);
+}
+.btn-danger:hover { background: rgba(255,77,109,0.1); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border-color: var(--border2);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 10px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── STATUS BADGE ─────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.badge-active { background: rgba(0,229,255,0.12); color: var(--accent); }
+.badge-firing { background: rgba(181,255,77,0.15); color: var(--accent3); }
+.badge-complete { background: rgba(255,209,102,0.12); color: var(--accent4); }
+.badge-reversal { background: rgba(255,77,109,0.12); color: var(--accent2); }
+.badge-failed { background: rgba(100,100,100,0.15); color: var(--text3); }
+.badge-stale { background: rgba(100,100,100,0.1); color: var(--text3); }
+.badge-detection { background: rgba(0,229,255,0.08); color: var(--text2); }
+
+/* ── GRID ─────────────────────────────────────────────────── */
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+
+/* ── CARD ─────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  position: relative;
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: var(--border2); }
+.card-accent-top {
+  border-top: 2px solid var(--accent);
+}
+.card-accent-red {
+  border-top: 2px solid var(--accent2);
+}
+
+/* ── SQUEEZE CARD ─────────────────────────────────────────── */
+.squeeze-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: all 0.2s;
+}
+.squeeze-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+
+.squeeze-card-header {
+  padding: 16px 20px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.squeeze-ticker {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.squeeze-score-ring {
+  margin-left: auto;
+  width: 54px;
+  height: 54px;
+  flex-shrink: 0;
+  position: relative;
+}
+.squeeze-score-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.squeeze-score-ring .score-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  transform: none;
+}
+
+.squeeze-card-metrics {
+  padding: 12px 20px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.metric-item { }
+.metric-label {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 3px;
+}
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.metric-value.positive { color: var(--accent3); }
+.metric-value.negative { color: var(--accent2); }
+.metric-value.neutral { color: var(--accent4); }
+
+.squeeze-card-thesis {
+  padding: 12px 20px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  border-bottom: 1px solid var(--border);
+  min-height: 60px;
+}
+.thesis-placeholder {
+  color: var(--text3);
+  font-style: italic;
+}
+
+.squeeze-card-footer {
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.freshness {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+  margin-left: auto;
+}
+
+/* ── PROGRESS BAR ─────────────────────────────────────────── */
+.progress-bar {
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+/* ── SCAN STATUS ─────────────────────────────────────────── */
+.scan-status {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  display: none;
+}
+.scan-status.visible { display: block; }
+.scan-stage {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.scan-info {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 6px;
+}
+
+/* ── STAT ROW ─────────────────────────────────────────────── */
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-label { color: var(--text2); }
+.stat-value { font-family: var(--font-mono); font-weight: 700; }
+
+/* ── FORM ELEMENTS ────────────────────────────────────────── */
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text2);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.form-input, .form-select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-input:focus, .form-select:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text3); }
+
+/* ── SCENARIO P&L DISPLAY ─────────────────────────────────── */
+.scenario-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.scenario-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.scenario-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+}
+.scenario-pnl {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+.pnl-positive { color: var(--accent3); }
+.pnl-negative { color: var(--accent2); }
+.pnl-pct {
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+.scenario-notes {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 6px;
+}
+
+/* ── LOG VIEWER ───────────────────────────────────────────── */
+.log-container {
+  background: #060810;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  height: 600px;
+  overflow-y: auto;
+  padding: 16px;
+}
+.log-line {
+  padding: 2px 0;
+  line-height: 1.7;
+  border-bottom: 1px solid rgba(255,255,255,0.02);
+}
+.log-react { color: #7ec8e3; }
+.log-mapreduce { color: #b5ff4d; }
+.log-rag { color: #ffd166; }
+.log-memory { color: #c77dff; }
+.log-thesis { color: #06ffa5; }
+.log-error { color: var(--accent2); }
+.log-info { color: var(--text2); }
+.log-warning { color: var(--accent4); }
+
+.log-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  transition: all 0.15s;
+}
+.filter-btn:hover, .filter-btn.active { border-color: var(--accent); color: var(--accent); }
+
+/* ── LIFECYCLE TABLE ──────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+thead th {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text3);
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+.mono { font-family: var(--font-mono); }
+
+/* ── CATALYST CHIPS ───────────────────────────────────────── */
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(0,229,255,0.08);
+  color: var(--accent);
+  margin: 2px;
+}
+.chip-earnings { background: rgba(255,209,102,0.1); color: var(--accent4); }
+.chip-news { background: rgba(0,229,255,0.08); color: var(--accent); }
+.chip-momentum { background: rgba(181,255,77,0.08); color: var(--accent3); }
+.chip-options_flow { background: rgba(199,125,255,0.1); color: #c77dff; }
+.chip-technical { background: rgba(100,200,255,0.08); color: #7ec8e3; }
+.chip-reddit_momentum { background: rgba(255,100,100,0.08); color: #ff8080; }
+
+/* ── UNIVERSE TABLE ───────────────────────────────────────── */
+.universe-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.universe-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.universe-chip:hover { border-color: var(--accent2); }
+.universe-chip .source {
+  font-size: 9px;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+.universe-chip .del {
+  color: var(--text3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.universe-chip .del:hover { color: var(--accent2); }
+
+/* ── MODAL ────────────────────────────────────────────────── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 28px;
+  width: 560px;
+  max-width: 95vw;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+.modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.modal-close {
+  margin-left: auto;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 18px;
+  line-height: 1;
+}
+.modal-close:hover { color: var(--text); }
+
+/* ── EMPTY STATE ──────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text3);
+}
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+.empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text2); }
+.empty-state p { font-size: 13px; line-height: 1.6; }
+
+/* ── DIVIDER ──────────────────────────────────────────────── */
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+/* ── SPARKLINE-LIKE SI TREND ─────────────────────────────── */
+.trend-rising { color: var(--accent2); }
+.trend-falling { color: var(--accent3); }
+.trend-flat { color: var(--text3); }
+
+/* ── EXPLANATION BOX ──────────────────────────────────────── */
+.explanation-box {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text2);
+  margin-top: 12px;
+}
+.explanation-box h4 {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+  letter-spacing: 0.06em;
+}
+
+/* ── SCROLLBAR ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── ANIMATIONS ───────────────────────────────────────────── */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fade-in { animation: fadeIn 0.3s ease; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* ── RESPONSIVE ──────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .grid-3 { grid-template-columns: 1fr; }
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="health-dot" id="healthDot" title="Server healthy"></div>
+  <div class="logo">TRaNK<span>SP</span></div>
+  <div class="header-spacer"></div>
+  <div class="header-time" id="headerTime">--</div>
+</header>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-tab active" data-tab="squeeze">⚡ Short Squeeze</div>
+  <div class="nav-tab" data-tab="scenario">📊 Scenario Planner</div>
+  <div class="nav-tab" data-tab="intake">🔍 Intake</div>
+  <div class="nav-tab" data-tab="history">🗂 History</div>
+  <div class="nav-tab" data-tab="runs">📋 Runs</div>
+  <div class="nav-tab" data-tab="predictions">🎯 Predictions</div>
+  <div class="nav-tab" data-tab="logs">🖥 Logs</div>
+  <div class="nav-tab" data-tab="settings">⚙ Settings</div>
+  <div class="nav-tab" data-tab="billing">💳 Billing</div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: SHORT SQUEEZE                             -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel active" id="tab-squeeze">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Short Squeeze Intelligence</div>
+      <div class="section-sub" id="lastScreenTime">No screen run yet</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost" id="btnRefreshAll" onclick="refreshAllCards()" title="Re-fetch SI data for all visible cards from Yahoo">
+      ↻ Refresh SI
+    </button>
+    <button class="btn btn-primary" id="btnRunScreen">
+      <span id="screenBtnText">▶ Run Screen</span>
+    </button>
+  </div>
+
+  <!-- Run Stats Banner -->
+  <div id="runStatsBanner" style="display:none;margin-bottom:16px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px">
+      <div style="display:flex;align-items:center;gap:0;flex-wrap:wrap">
+        <!-- DB Total -->
+        <div style="padding:0 20px 0 0;border-right:1px solid var(--border)">
+          <div style="font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">Total in DB</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text)" id="statTotalInDB">—</div>
+        </div>
+        <!-- New this run -->
+        <div style="padding:0 20px;border-right:1px solid var(--border)">
+          <div style="font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">New This Run</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent3)" id="statNewTickers">—</div>
+        </div>
+        <!-- Updated -->
+        <div style="padding:0 20px;border-right:1px solid var(--border)">
+          <div style="font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">Refreshed</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent4)" id="statUpdated">—</div>
+        </div>
+        <!-- Delta vs last run -->
+        <div style="padding:0 20px;border-right:1px solid var(--border)">
+          <div style="font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">vs Last Run</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700" id="statDelta">—</div>
+        </div>
+        <!-- Screened -->
+        <div style="padding:0 20px;border-right:1px solid var(--border)">
+          <div style="font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">Screened</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--text2)" id="statScreened">—</div>
+        </div>
+        <!-- Run ID + timestamp -->
+        <div style="padding:0 0 0 20px;flex:1;min-width:180px">
+          <div style="font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px">Last Run</div>
+          <div style="font-family:var(--font-mono);font-size:12px;color:var(--text2)" id="statRunAt">—</div>
+          <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:2px" id="statRunId">—</div>
+        </div>
+        <!-- Run History toggle -->
+        <button class="btn btn-ghost btn-sm" onclick="toggleRunHistory()" style="margin-left:auto">📋 Run History</button>
+      </div>
+    </div>
+
+    <!-- Expandable run history table -->
+    <div id="runHistoryPanel" style="display:none;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:8px 14px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Run ID</th>
+            <th style="padding:8px 14px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Time</th>
+            <th style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Screened</th>
+            <th style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Found</th>
+            <th style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">New</th>
+            <th style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Refreshed</th>
+            <th style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">DB Total</th>
+            <th style="padding:8px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Δ vs Prev</th>
+          </tr>
+        </thead>
+        <tbody id="runHistoryBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Scan Status -->
+  <div class="scan-status" id="scanStatus">
+    <div class="scan-stage" id="scanStage">Initializing...</div>
+    <div class="progress-bar"><div class="progress-fill" id="scanProgress" style="width:0%"></div></div>
+    <div class="scan-info" id="scanInfo">—</div>
+  </div>
+
+  <!-- Results Grid -->
+  <div class="grid-3" id="squeezeGrid">
+    <div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-state-icon">🎯</div>
+      <h3>Ready to Screen</h3>
+      <p>Click "Run Screen" to discover short squeeze candidates from your universe.<br>
+         Results are ranked by composite squeeze score.</p>
+    </div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: SCENARIO PLANNER                         -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-scenario">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Scenario P&L Planner</div>
+      <div class="section-sub">Model bullish (Long + Calls) and bearish (Puts) scenarios per ticker</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Input Panel -->
+    <div class="card card-accent-top">
+      <h3 style="font-size:14px;margin-bottom:20px;font-weight:700;">Configure Scenario</h3>
+      
+      <div class="form-group">
+        <label class="form-label">Ticker</label>
+        <input class="form-input" id="sp_ticker" placeholder="e.g. GME" style="text-transform:uppercase">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Capital per Scenario ($)</label>
+        <input class="form-input" id="sp_capital" type="number" placeholder="15000">
+      </div>
+
+      <hr class="divider">
+      <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Price Levels</div>
+
+      <div class="grid-2" style="gap:12px">
+        <div class="form-group">
+          <label class="form-label">Entry Price ($)</label>
+          <input class="form-input" id="sp_entry" type="number" step="0.01" placeholder="Detection price">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Peak Price ($)</label>
+          <input class="form-input" id="sp_peak" type="number" step="0.01" placeholder="Squeeze peak">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bullish Exit ($)</label>
+          <input class="form-input" id="sp_bullish_exit" type="number" step="0.01" placeholder="Target sell">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bearish Target ($)</label>
+          <input class="form-input" id="sp_bearish_target" type="number" step="0.01" placeholder="Put target">
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <!-- Claude Options Recommendation Button -->
+      <button class="btn btn-ghost" style="width:100%;margin-bottom:16px" id="btnGetOptions" onclick="getClaudeOptions()">
+        🤖 Ask Claude to Recommend Options
+      </button>
+
+      <!-- Claude's recommendation panel (hidden until loaded) -->
+      <div id="claudeOptionsPanel" style="display:none;margin-bottom:16px">
+        <div style="font-size:11px;color:var(--accent);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">
+          Claude's Recommendation
+        </div>
+        <div id="claudeOptionsSummary" style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6"></div>
+
+        <!-- Recommended Call -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent3);border-radius:var(--radius);padding:12px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--accent3)">📈 Recommended Call</span>
+            <button class="btn btn-ghost btn-sm" onclick="applyClaudeCall()" style="font-size:10px">Use This ↓</button>
+          </div>
+          <div id="claudeCallDetails" style="font-family:var(--font-mono);font-size:11px;color:var(--text2)"></div>
+        </div>
+
+        <!-- Alternative Call -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent4);border-radius:var(--radius);padding:12px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--accent4)">📈 Alternative Call (OTM/Higher Leverage)</span>
+            <button class="btn btn-ghost btn-sm" onclick="applyClaudeAltCall()" style="font-size:10px">Use This ↓</button>
+          </div>
+          <div id="claudeAltCallDetails" style="font-family:var(--font-mono);font-size:11px;color:var(--text2)"></div>
+        </div>
+
+        <!-- Recommended Put -->
+        <div style="background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent2);border-radius:var(--radius);padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--accent2)">📉 Recommended Put</span>
+            <button class="btn btn-ghost btn-sm" onclick="applyClaudePut()" style="font-size:10px">Use This ↓</button>
+          </div>
+          <div id="claudePutDetails" style="font-family:var(--font-mono);font-size:11px;color:var(--text2)"></div>
+        </div>
+      </div>
+
+      <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Option Premium Overrides (editable)</div>
+
+      <div class="grid-2" style="gap:12px">
+        <div class="form-group">
+          <label class="form-label">Call Strike ($)</label>
+          <input class="form-input" id="sp_call_strike" type="number" step="0.50" placeholder="Claude recommends">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Call Expiry</label>
+          <input class="form-input" id="sp_call_expiry" type="text" placeholder="YYYY-MM-DD">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Call Entry Premium ($)</label>
+          <input class="form-input" id="sp_call_entry" type="number" step="0.01" placeholder="Auto (BS)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Call Exit Premium ($)</label>
+          <input class="form-input" id="sp_call_exit" type="number" step="0.01" placeholder="Auto (BS)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Put Strike ($)</label>
+          <input class="form-input" id="sp_put_strike" type="number" step="0.50" placeholder="Claude recommends">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Put Expiry</label>
+          <input class="form-input" id="sp_put_expiry" type="text" placeholder="YYYY-MM-DD">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Put Entry Premium ($)</label>
+          <input class="form-input" id="sp_put_entry" type="number" step="0.01" placeholder="Auto (BS)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Put Exit Premium ($)</label>
+          <input class="form-input" id="sp_put_exit" type="number" step="0.01" placeholder="Auto (BS)">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" style="width:100%" id="btnCalculate">▶ Calculate Scenarios</button>
+    </div>
+
+    <!-- Results Panel -->
+    <div id="scenarioResults">
+      <div class="empty-state">
+        <div class="empty-state-icon">📊</div>
+        <h3>No Scenarios Calculated</h3>
+        <p>Fill in the inputs, ask Claude for options, then click Calculate.</p>
+      </div>
+    </div>
+
+    <div class="card card-accent-top">
+      <h3 style="font-size:13px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:20px">Claude Universe</h3>
+      <div class="form-group">
+        <label class="form-label">Tickers to Request from Claude</label>
+        <input class="form-input" id="set_universe_size" type="number" placeholder="30">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">
+          How many squeeze candidates Claude identifies per run. 20–50 recommended.
+        </div>
+      </div>
+    </div>
+
+    <div class="card card-accent-top">
+      <h3 style="font-size:13px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:20px">Yahoo Screener</h3>
+      <div class="form-group">
+        <label class="form-label">Pages to Scrape (100 tickers/page)</label>
+        <input class="form-input" id="set_yahoo_pages" type="number" placeholder="5">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">5 = 500 tickers (~30s) &nbsp;|&nbsp; 10 = 1,000 (~1.5min) &nbsp;|&nbsp; 40 = all 3,895 (~4min)</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Delay Between Pages (seconds)</label>
+        <input class="form-input" id="set_yahoo_delay" type="number" placeholder="5">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Minimum 3s recommended. 5s is polite and avoids 429 blocks.</div>
+      </div>
+    </div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: INTAKE                                   -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-intake">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Universe Builder</div>
+      <div class="section-sub">Live candidates from Finviz, Yahoo, StockAnalysis, Reddit WSB, FINRA</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost btn-sm" id="btnAddManual">+ Add Manual</button>
+    <button class="btn btn-primary" id="btnBuildUniverse">🌐 Build from Web</button>
+  </div>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="section-header" style="margin-bottom:12px">
+      <span style="font-size:13px;font-weight:600">Universe (<span id="universeCount">0</span> tickers)</span>
+      <div class="spacer"></div>
+      <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono)" id="universeStatus">—</span>
+    </div>
+    <div class="universe-grid" id="universeGrid">
+      <span style="color:var(--text3);font-size:13px">Loading universe...</span>
+    </div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: HISTORY                                  -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-history">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Lifecycle Archive</div>
+      <div class="section-sub">Closed, completed, and failed squeeze cycles</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadHistory()">↻ Refresh</button>
+  </div>
+
+  <div class="table-wrap">
+    <table id="historyTable">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Status</th>
+          <th>Entry</th>
+          <th>Peak</th>
+          <th>Exit</th>
+          <th>Peak Chg</th>
+          <th>SI Chg</th>
+          <th>Trigger</th>
+          <th>Date</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody id="historyBody">
+        <tr><td colspan="10" style="text-align:center;color:var(--text3);padding:40px">No completed squeeze cycles yet.</td></tr>
+      </tbody>
+    </table>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: RUNS                                     -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-runs">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Run Tracker</div>
+      <div class="section-sub">Every screen run — tickers, sources, timing, and DB operations per ticker</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadRunsTab()">↻ Refresh</button>
+  </div>
+
+  <!-- Run summary table -->
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:20px">
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Run ID</th>
+          <th style="padding:10px 14px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Date / Time</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Screened</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Found</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">New</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Updated</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">DB Total</th>
+          <th style="padding:10px 14px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Δ vs Prev</th>
+          <th style="padding:10px 14px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Detail</th>
+        </tr>
+      </thead>
+      <tbody id="runsTableBody">
+        <tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">No runs yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Per-ticker detail panel (expands when a run is clicked) -->
+  <div id="runDetailPanel" style="display:none">
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px">
+      Run Detail: <span id="runDetailId" style="font-family:var(--font-mono);color:var(--accent)">—</span>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Ticker</th>
+            <th style="padding:8px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Massive</th>
+            <th style="padding:8px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Finviz</th>
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">DB Op</th>
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">DB Time</th>
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">LLM</th>
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">RAG</th>
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">ChromaDB</th>
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Agent</th>
+            <th style="padding:8px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Error</th>
+          </tr>
+        </thead>
+        <tbody id="runDetailBody"></tbody>
+      </table>
+    </div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: PREDICTIONS (Learning Engine)            -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-predictions">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Prediction Tracker &amp; Learning Engine</div>
+      <div class="section-sub">Phase 1-4: Outcome tracking, episodic memory, calibration, meta-learning</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost btn-sm" onclick="triggerEvaluation()">▶ Evaluate Now</button>
+    <button class="btn btn-ghost btn-sm" onclick="loadPredictionsTab()">↻ Refresh</button>
+  </div>
+
+  <!-- Calibration stats banner -->
+  <div id="calibrationBanner" style="display:none;margin-bottom:20px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px">
+      <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Calibration Stats (Phase 3)</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px" id="calibrationGrid"></div>
+    </div>
+  </div>
+
+  <!-- Predictions table -->
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="filter-btn active" onclick="filterPredictions(this,'ALL')">All</button>
+    <button class="filter-btn" onclick="filterPredictions(this,'OPEN')">Open</button>
+    <button class="filter-btn" onclick="filterPredictions(this,'CLOSED')">Closed</button>
+  </div>
+
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Ticker</th>
+          <th style="padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Date</th>
+          <th style="padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Dir</th>
+          <th style="padding:9px 12px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Entry</th>
+          <th style="padding:9px 12px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Target</th>
+          <th style="padding:9px 12px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Conf%</th>
+          <th style="padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Horizon</th>
+          <th style="padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Status</th>
+          <th style="padding:9px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Outcome</th>
+          <th style="padding:9px 12px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">P&amp;L%</th>
+        </tr>
+      </thead>
+      <tbody id="predictionsBody">
+        <tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px">No predictions yet. Run a screen to generate predictions.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Lessons learned -->
+  <div style="margin-top:20px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px">Phase 4 — Lessons Learned Documents</div>
+    <div id="lessonsContainer" style="color:var(--text3);font-size:13px">No lessons generated yet (requires 10+ completed predictions).</div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: LOGS                                     -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-logs">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Agent Activity Log</div>
+      <div class="section-sub">Auto-refreshes every 5 seconds</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-ghost btn-sm" onclick="loadLogs()">↻ Refresh Now</button>
+  </div>
+
+  <div class="log-filters">
+    <button class="filter-btn active" data-filter="" onclick="setLogFilter(this, '')">All</button>
+    <button class="filter-btn log-react" data-filter="react" onclick="setLogFilter(this, 'ReAct')">ReAct</button>
+    <button class="filter-btn log-mapreduce" data-filter="mapreduce" onclick="setLogFilter(this, 'MapReduce')">MapReduce</button>
+    <button class="filter-btn log-rag" data-filter="rag" onclick="setLogFilter(this, 'rag')">RAG</button>
+    <button class="filter-btn log-memory" data-filter="memory" onclick="setLogFilter(this, 'memory')">Memory</button>
+    <button class="filter-btn log-thesis" data-filter="thesis" onclick="setLogFilter(this, 'Thesis')">Thesis</button>
+    <button class="filter-btn log-error" data-filter="error" onclick="setLogFilter(this, 'ERROR')">Errors</button>
+  </div>
+
+  <div class="log-container" id="logContainer">
+    <span style="color:var(--text3)">Loading logs...</span>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: SETTINGS                                 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-settings">
+  <div class="section-header">
+    <div><div class="section-title">Settings</div></div>
+    <div class="spacer"></div>
+    <button class="btn btn-primary" id="btnSaveSettings">Save Settings</button>
+  </div>
+
+  <div class="grid-2">
+    <div class="card card-accent-top">
+      <h3 style="font-size:13px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:20px">Capital & Portfolio</h3>
+      
+      <div class="form-group">
+        <label class="form-label">Capital per Scenario ($)</label>
+        <input class="form-input" id="set_capital" type="number" placeholder="15000">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Default capital allocated per scenario (A, B, or C)</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Portfolio Size (max tickers)</label>
+        <input class="form-input" id="set_portfolio_size" type="number" placeholder="10">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Maximum tickers to enrich and thesis per screen run</div>
+      </div>
+    </div>
+
+    <div class="card card-accent-top">
+      <h3 style="font-size:13px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin-bottom:20px">Screener Thresholds</h3>
+      
+      <div class="form-group">
+        <label class="form-label">Min Score Threshold</label>
+        <input class="form-input" id="set_min_score" type="number" placeholder="40">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Minimum composite score (0–100) to include in results</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Market Cap Floor ($)</label>
+        <input class="form-input" id="set_mc_floor" type="number" placeholder="250000000">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Minimum market cap in USD (default: $250M)</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Put OI Liquidity Threshold</label>
+        <input class="form-input" id="set_put_oi" type="number" placeholder="500">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Minimum open interest for liquid puts (contracts)</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Auto-Eval Delay (hours)</label>
+        <input class="form-input" id="set_auto_eval" type="number" placeholder="72">
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Hours after detection before bearish evaluation triggers</div>
+      </div>
+    </div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: BILLING                                  -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-billing">
+  <div class="section-header">
+    <div>
+      <div class="section-title">Billing &amp; Usage</div>
+      <div class="section-sub">Monitor costs and usage across all TRaNKSP services</div>
+    </div>
+    <div class="spacer"></div>
+    <div id="billingHealthDots" style="display:flex;gap:8px;align-items:center"></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px">
+
+    <!-- Anthropic Claude API -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">🤖</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Anthropic Claude API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Powers LLM thesis generation, MapReduce, scoring</div>
+        </div>
+        <div id="dot_anthropic" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_anthropic">Checking...</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://console.anthropic.com/settings/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Billing Dashboard</a>
+        <a href="https://console.anthropic.com/settings/usage" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📊 Usage Monitor</a>
+        <a href="https://console.anthropic.com/settings/keys" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🔑 API Keys</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Models used: claude-sonnet-4 (thesis/reduce), claude-haiku-4.5 (map/explain/lessons)
+      </div>
+    </div>
+
+    <!-- Claude.ai Consumer -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">💬</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Claude.ai Consumer</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Your claude.ai subscription and chat usage</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://claude.ai/settings/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Subscription Billing</a>
+        <a href="https://claude.ai/settings" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">⚙ Account Settings</a>
+        <a href="https://claude.ai" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🏠 Open Claude.ai</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Separate from API billing — this is your chat.claude.ai plan cost
+      </div>
+    </div>
+
+    <!-- Massive.com (Polygon) -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📈</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Massive.com (formerly Polygon.io)</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Stock data, short interest, snapshots — official API</div>
+        </div>
+        <div id="dot_massive" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_massive">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Tier Limit</span><span class="stat-value mono">5 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Gap</span><span class="stat-value mono" style="color:var(--accent3)">13s between calls ✓</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://massive.com/dashboard/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Billing Dashboard</a>
+        <a href="https://massive.com/dashboard/usage" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📊 Usage Monitor</a>
+        <a href="https://massive.com/dashboard/keys" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🔑 API Keys</a>
+        <a href="https://massive.com/pricing" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoints used: /v2/snapshot (price), /v3/reference/short-interest, /v3/reference/tickers
+      </div>
+    </div>
+
+    <!-- Tavily -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">🔍</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Tavily Search API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Powers ReAct agent news search + SEC filing lookups</div>
+        </div>
+        <div id="dot_tavily" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_tavily">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Credits</span><span class="stat-value mono">1,000 / month</span></div>
+      <div class="stat-row"><span class="stat-label">Cost per search</span><span class="stat-value mono">1 credit (basic)</span></div>
+      <div class="stat-row"><span class="stat-label">Per screen run</span><span class="stat-value mono" style="color:var(--accent3)">~5-10 credits ✓</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://app.tavily.com/home" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Dashboard &amp; Usage</a>
+        <a href="https://app.tavily.com/home#billing" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Billing &amp; Credits</a>
+        <a href="https://docs.tavily.com/documentation/api-credits" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Credit Docs</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Usage: ReAct agent (5 tools × portfolio_size tickers per screen run)
+      </div>
+    </div>
+
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- ═══════ MODALS ═══════ -->
+
+<!-- Score Explanation Modal -->
+<div class="modal-overlay" id="explainModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Score Explanation: <span id="explainTicker">—</span></span>
+      <span class="modal-close" onclick="closeModal('explainModal')">✕</span>
+    </div>
+    <div id="explainContent">
+      <div style="text-align:center;padding:20px"><div class="spinner"></div></div>
+    </div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Thesis Detail Modal -->
+<div class="modal-overlay" id="thesisModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Thesis: <span id="thesisTicker">—</span></span>
+      <span class="modal-close" onclick="closeModal('thesisModal')">✕</span>
+    </div>
+    <div id="thesisContent"></div>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Add Manual Ticker Modal -->
+<div class="modal-overlay" id="addTickerModal">
+  <div class="modal" style="width:360px">
+    <div class="modal-title">
+      <span>Add Ticker</span>
+      <span class="modal-close" onclick="closeModal('addTickerModal')">✕</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ticker Symbol</label>
+      <input class="form-input" id="manualTicker" placeholder="e.g. MSTR" style="text-transform:uppercase">
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="addManualTicker()">Add to Universe</button>
+    <!-- Finnhub -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">📊</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Finnhub API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
+        </div>
+        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
+      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
+      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
+        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
+        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// GLOBAL STATE
+// ═══════════════════════════════════════════════════════
+let logFilter = '';
+let logInterval = null;
+let currentResults = [];
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+  // Header clock
+  setInterval(() => {
+    const now = new Date();
+    document.getElementById('headerTime').textContent =
+      now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }, 1000);
+
+  // Health check
+  checkHealth();
+  setInterval(checkHealth, 30000);
+
+  // Tab navigation
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+  });
+
+  // Buttons
+  document.getElementById('btnRunScreen').addEventListener('click', runScreen);
+  document.getElementById('btnCalculate').addEventListener('click', calculateScenarios);
+  document.getElementById('btnBuildUniverse').addEventListener('click', buildUniverse);
+  document.getElementById('btnSaveSettings').addEventListener('click', saveSettings);
+  document.getElementById('btnAddManual').addEventListener('click', () => openModal('addTickerModal'));
+
+  // Load initial data
+  loadUniverse();
+  loadSettings();
+  loadRunStats();
+  loadExistingResults();  // restore cards from DB on page load
+
+  // Auto-refresh logs when on that tab
+  logInterval = setInterval(() => {
+    if (document.querySelector('#tab-logs.active')) loadLogs();
+  }, 5000);
+
+  // Manual ticker uppercase
+  document.getElementById('manualTicker').addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase();
+  });
+  document.getElementById('sp_ticker').addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase();
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════
+function switchTab(tabId) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+  document.getElementById(`tab-${tabId}`).classList.add('active');
+
+  if (tabId === 'logs') loadLogs();
+  if (tabId === 'history') loadHistory();
+  if (tabId === 'intake') loadUniverse();
+  if (tabId === 'settings') loadSettings();
+  if (tabId === 'squeeze') { if (!currentResults.length) loadExistingResults(); }
+  if (tabId === 'runs') loadRunsTab();
+  if (tabId === 'predictions') loadPredictionsTab();
+  if (tabId === 'billing') loadBillingTab();
+}
+
+// ═══════════════════════════════════════════════════════
+// HEALTH
+// ═══════════════════════════════════════════════════════
+async function checkHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const data = await r.json();
+    const dot = document.getElementById('healthDot');
+    dot.style.background = data.status === 'ok' ? 'var(--accent3)' : 'var(--accent2)';
+    dot.title = `API Key: ${data.anthropic_key ? '✓' : '✗'} | Tavily: ${data.tavily_key ? '✓' : '✗'}`;
+  } catch { document.getElementById('healthDot').style.background = 'var(--accent2)'; }
+}
+
+// ═══════════════════════════════════════════════════════
+// MODALS
+// ═══════════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════
+// SHORT SQUEEZE TAB
+// ═══════════════════════════════════════════════════════
+async function runScreen() {
+  const btn = document.getElementById('btnRunScreen');
+  const btnText = document.getElementById('screenBtnText');
+  btn.disabled = true;
+  btnText.innerHTML = '<span class="spinner"></span> Screening...';
+
+  const statusDiv = document.getElementById('scanStatus');
+  statusDiv.classList.add('visible');
+  setProgress('Connecting to pipeline...', 5, '');
+
+  try {
+    const evtSource = new EventSource('/api/screen/stream');
+
+    evtSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'start') {
+        setProgress(`Screening ${data.ticker_count} tickers from universe`, 15, `Run ID: ${data.run_id}`);
+      }
+      else if (data.type === 'progress') {
+        const stageProgress = { screen: 35, enrich: 65, thesis: 90 };
+        const pct = stageProgress[data.stage] || 50;
+        setProgress(data.message, pct, data.stage.toUpperCase());
+      }
+      else if (data.type === 'results') {
+        currentResults = data.results;
+        const s = data.run_summary || {};
+        const found = data.results.length;
+        setProgress('Saving to database...', 100, `${found} candidates found`);
+        renderSqueezeCards(data.results);
+        updateRunStatsBanner(s);
+      }
+      else if (data.type === 'done') {
+        const s = data.run_summary || {};
+        evtSource.close();
+        btn.disabled = false;
+        btnText.textContent = '▶ Run Screen';
+        // Update header subtitle
+        const ts = s.run_at ? new Date(s.run_at + ' UTC').toLocaleString() : new Date().toLocaleString();
+        document.getElementById('lastScreenTime').textContent =
+          `Last run: ${ts} · ${s.candidates_found || 0} candidates · ${s.total_in_db || 0} total in DB`;
+        setTimeout(() => statusDiv.classList.remove('visible'), 3000);
+        loadRunStats(); // refresh history table
+      }
+      else if (data.type === 'error') {
+        setProgress(`Error: ${data.message}`, 0, '');
+        evtSource.close();
+        btn.disabled = false;
+        btnText.textContent = '▶ Run Screen';
+      }
+    };
+
+    evtSource.onerror = () => {
+      evtSource.close();
+      btn.disabled = false;
+      btnText.textContent = '▶ Run Screen';
+    };
+
+  } catch (err) {
+    btn.disabled = false;
+    btnText.textContent = '▶ Run Screen';
+    alert('Screen failed: ' + err.message);
+  }
+}
+
+function setProgress(stage, pct, info) {
+  document.getElementById('scanStage').textContent = stage;
+  document.getElementById('scanProgress').style.width = pct + '%';
+  document.getElementById('scanInfo').textContent = info;
+}
+
+// ═══════════════════════════════════════════════════════
+// RUN STATS BANNER
+// ═══════════════════════════════════════════════════════
+function updateRunStatsBanner(s) {
+  const banner = document.getElementById('runStatsBanner');
+  banner.style.display = 'block';
+
+  document.getElementById('statTotalInDB').textContent = s.total_in_db ?? '—';
+
+  const newEl = document.getElementById('statNewTickers');
+  newEl.textContent = s.new_tickers ?? '—';
+  newEl.style.color = (s.new_tickers > 0) ? 'var(--accent3)' : 'var(--text3)';
+
+  document.getElementById('statUpdated').textContent = s.updated_tickers ?? '—';
+  document.getElementById('statScreened').textContent = s.tickers_screened ?? '—';
+
+  const deltaEl = document.getElementById('statDelta');
+  const delta = s.delta ?? 0;
+  if (delta > 0) {
+    deltaEl.textContent = `+${delta}`;
+    deltaEl.style.color = 'var(--accent3)';
+  } else if (delta < 0) {
+    deltaEl.textContent = String(delta);
+    deltaEl.style.color = 'var(--accent2)';
+  } else {
+    deltaEl.textContent = s.prev_total === 0 ? 'First run' : '±0';
+    deltaEl.style.color = 'var(--text3)';
+  }
+
+  const ts = s.run_at ? new Date(s.run_at + ' UTC').toLocaleString() : '—';
+  document.getElementById('statRunAt').textContent = ts;
+  document.getElementById('statRunId').textContent = `Run ID: ${s.run_id || '—'}`;
+}
+
+async function loadRunStats() {
+  try {
+    const r = await fetch('/api/screen/runs?limit=10');
+    const runs = await r.json();
+    if (!runs || !runs.length) return;
+
+    // Update banner with most recent run
+    updateRunStatsBanner(runs[0]);
+
+    // Update header subtitle freshness
+    const latest = runs[0];
+    const ts = latest.run_at ? new Date(latest.run_at + ' UTC').toLocaleString() : '—';
+    document.getElementById('lastScreenTime').textContent =
+      `Last run: ${ts} · ${latest.candidates_found} candidates · ${latest.total_in_db} total in DB`;
+
+    // Populate history table
+    const tbody = document.getElementById('runHistoryBody');
+    tbody.innerHTML = runs.map((run, i) => {
+      const delta = run.delta ?? 0;
+      const deltaStr = delta > 0 ? `<span style="color:var(--accent3)">+${delta}</span>`
+                     : delta < 0 ? `<span style="color:var(--accent2)">${delta}</span>`
+                     : `<span style="color:var(--text3)">${i === runs.length-1 ? 'First' : '±0'}</span>`;
+      const rowTs = run.run_at ? new Date(run.run_at + ' UTC').toLocaleString() : '—';
+      const isLatest = i === 0;
+      return `<tr style="${isLatest ? 'background:rgba(0,229,255,0.04)' : ''}">
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:11px;color:var(--text3)">${run.run_id}${isLatest ? ' <span style=\'color:var(--accent);font-size:9px\'>LATEST</span>' : ''}</td>
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:11px;color:var(--text2)">${rowTs}</td>
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--text2)">${run.tickers_screened}</td>
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--text)">${run.candidates_found}</td>
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--accent3)">${run.new_tickers}</td>
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--accent4)">${run.updated_tickers}</td>
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;font-weight:700">${run.total_in_db}</td>
+        <td style="padding:8px 14px;font-family:var(--font-mono);font-size:12px;text-align:right">${deltaStr}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) { console.warn('loadRunStats:', e); }
+}
+
+let runHistoryVisible = false;
+function toggleRunHistory() {
+  runHistoryVisible = !runHistoryVisible;
+  document.getElementById('runHistoryPanel').style.display = runHistoryVisible ? 'block' : 'none';
+  if (runHistoryVisible) loadRunStats();
+}
+
+async function loadExistingResults() {
+  // Restore cards from DB on page load / tab switch
+  // Calls /api/results which returns the most recent run's results
+  try {
+    const r = await fetch('/api/results?limit=50');
+    const data = await r.json();
+    if (data && data.length > 0) {
+      currentResults = data.map(row => ({
+        ticker:       row.ticker,
+        score:        row.score,
+        short_float:  row.short_float,
+        days_to_cover: row.days_to_cover,
+        float_shares: row.float_shares,
+        price:        row.price,
+        market_cap:   row.market_cap,
+        volume_ratio: row.volume_ratio,
+        si_trend:     row.si_trend,
+        has_options:  row.has_options,
+        phase:        row.phase || 'DETECTION',
+        thesis: row.setup ? {
+          setup:          row.setup,
+          trigger:        row.trigger,
+          mechanics:      row.mechanics,
+          risk:           row.risk,
+          confidence:     row.confidence,
+          time_horizon:   row.time_horizon,
+          catalyst_types: (() => { try { return JSON.parse(row.catalyst_types || '[]'); } catch { return []; } })(),
+          bullish_score:  row.score
+        } : null,
+        generated_at: row.screened_at
+      }));
+      renderSqueezeCards(currentResults);
+      // Update subtitle
+      const ts = data[0].screened_at ? new Date(data[0].screened_at).toLocaleString() : '—';
+      document.getElementById('lastScreenTime').textContent =
+        `Last run: ${ts} · ${data.length} candidates · restored from DB`;
+    }
+  } catch(e) {
+    console.warn('loadExistingResults:', e);
+  }
+}
+
+async function refreshAllCards() {
+  if (!currentResults || !currentResults.length) {
+    alert('No cards to refresh. Run a screen first.');
+    return;
+  }
+  const btn = document.getElementById('btnRefreshAll');
+  btn.disabled = true;
+  btn.textContent = '⏳ Refreshing...';
+
+  let done = 0;
+  for (const r of currentResults) {
+    btn.textContent = `⏳ ${done+1}/${currentResults.length}`;
+    await reEvaluate(r.ticker);
+    done++;
+    await new Promise(res => setTimeout(res, 500)); // small gap between cards
+  }
+
+  btn.disabled = false;
+  btn.textContent = '↻ Refresh SI';
+}
+
+function renderSqueezeCards(results) {
+  const grid = document.getElementById('squeezeGrid');
+  if (!results || results.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="empty-state-icon">🔍</div>
+      <h3>No Candidates Found</h3>
+      <p>No tickers met the minimum score threshold. Try lowering the threshold in Settings or expanding your universe.</p>
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = results.map(r => buildSqueezeCard(r)).join('');
+}
+
+function buildSqueezeCard(r) {
+  const score = (r.score || 0).toFixed(0);
+  const scoreColor = score >= 70 ? '#b5ff4d' : score >= 50 ? '#ffd166' : '#8899aa';
+  const circumference = 2 * Math.PI * 22;
+  const dashOffset = circumference - (score / 100) * circumference;
+
+  const siTrendClass = r.si_trend === 'RISING' ? 'trend-rising' :
+                       r.si_trend === 'FALLING' ? 'trend-falling' : 'trend-flat';
+  const siTrendIcon = r.si_trend === 'RISING' ? '↑' :
+                      r.si_trend === 'FALLING' ? '↓' : '→';
+
+  const thesis = r.thesis || {};
+  const catalysts = Array.isArray(thesis.catalyst_types)
+    ? thesis.catalyst_types.map(c => `<span class="chip chip-${c}">${c}</span>`).join('')
+    : '';
+
+  const setupText = thesis.setup
+    ? thesis.setup.substring(0, 120) + (thesis.setup.length > 120 ? '...' : '')
+    : '<span class="thesis-placeholder">No thesis generated</span>';
+
+  const confidence = thesis.confidence ? `${thesis.confidence.toFixed(0)}%` : '—';
+  const timeHorizon = thesis.time_horizon || '—';
+  const freshness = r.generated_at
+    ? timeSince(r.generated_at) + ' ago'
+    : 'not yet';
+
+  const phase = r.phase || 'DETECTION';
+  const phaseBadge = `<span class="badge badge-${phase.toLowerCase()}">${phase}</span>`;
+
+  return `
+  <div class="squeeze-card fade-in" id="card-${r.ticker}">
+    <div class="squeeze-card-header">
+      <div>
+        <div class="squeeze-ticker">${r.ticker}</div>
+        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+          ${phaseBadge}
+          ${r.has_options ? '<span class="badge badge-active">Options ✓</span>' : ''}
+        </div>
+      </div>
+      <div class="squeeze-score-ring">
+        <svg viewBox="0 0 54 54">
+          <circle cx="27" cy="27" r="22" fill="none" stroke="var(--border2)" stroke-width="4"/>
+          <circle cx="27" cy="27" r="22" fill="none" stroke="${scoreColor}" stroke-width="4"
+            stroke-dasharray="${circumference}" stroke-dashoffset="${dashOffset}"
+            stroke-linecap="round"/>
+        </svg>
+        <div class="score-text" style="color:${scoreColor}">${score}</div>
+      </div>
+    </div>
+
+    <div class="squeeze-card-metrics">
+      <div class="metric-item">
+        <div class="metric-label">Short %</div>
+        <div class="metric-value ${(r.short_float||0) >= 30 ? 'positive' : ''}">${(r.short_float||0).toFixed(1)}%</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">Days to Cover</div>
+        <div class="metric-value ${(r.days_to_cover||0) >= 7 ? 'positive' : ''}">${(r.days_to_cover||0).toFixed(1)}</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">Vol Ratio</div>
+        <div class="metric-value ${(r.volume_ratio||0) >= 2 ? 'positive' : ''}">${(r.volume_ratio||0).toFixed(1)}x</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">Float (M)</div>
+        <div class="metric-value">${(r.float_shares||0).toFixed(1)}</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">Price</div>
+        <div class="metric-value">$${(r.price||0).toFixed(2)}</div>
+      </div>
+      <div class="metric-item">
+        <div class="metric-label">SI Trend</div>
+        <div class="metric-value ${siTrendClass}">${siTrendIcon} ${r.si_trend||'—'}</div>
+      </div>
+    </div>
+
+    ${catalysts ? `<div style="padding:8px 20px;border-bottom:1px solid var(--border)">${catalysts}</div>` : ''}
+
+    <div class="squeeze-card-thesis">${setupText}</div>
+
+    <div class="squeeze-card-footer">
+      <button class="btn btn-ghost btn-sm" onclick="openThesisModal('${r.ticker}', ${JSON.stringify(r).replace(/'/g,"&#39;")})">
+        📋 Thesis
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="openExplainModal('${r.ticker}', ${JSON.stringify({
+        ticker: r.ticker, score: r.score, short_float: r.short_float,
+        days_to_cover: r.days_to_cover, volume_ratio: r.volume_ratio,
+        float_shares: r.float_shares, si_trend: r.si_trend
+      }).replace(/'/g,"&#39;")})">
+        🔎 Explain
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="loadToScenario('${r.ticker}', ${r.price||0})">
+        📊 Scenario
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="reEvaluate('${r.ticker}')">
+        ↻ Re-eval
+      </button>
+      <div class="freshness">⏱ ${freshness}</div>
+    </div>
+  </div>`;
+}
+
+function timeSince(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h/24)}d`;
+}
+
+// ═══════════════════════════════════════════════════════
+// THESIS MODAL
+// ═══════════════════════════════════════════════════════
+async function openThesisModal(ticker, data) {
+  document.getElementById('thesisTicker').textContent = ticker;
+  let thesis = data.thesis || {};
+  const content = document.getElementById('thesisContent');
+
+  // If no thesis yet — generate on demand
+  if (!thesis || !thesis.setup || thesis.setup === 'Analysis in progress.') {
+    openModal('thesisModal');
+    content.innerHTML = '<div style="text-align:center;padding:30px"><div class="spinner"></div><br><span style="color:var(--text3);font-size:12px">Generating thesis via Claude...</span></div>';
+    try {
+      const r = await fetch(`/api/generate-thesis/${ticker}`, {method:'POST'});
+      const d = await r.json();
+      thesis = d.thesis || {};
+      // Update the local data object so re-opens are instant
+      data.thesis = thesis;
+      const idx = currentResults.findIndex(x => x.ticker === ticker);
+      if (idx >= 0) currentResults[idx].thesis = thesis;
+    } catch(e) {
+      content.innerHTML = `<p style="color:var(--accent2)">Thesis generation failed: ${e.message}</p>`;
+      return;
+    }
+  } else {
+    openModal('thesisModal');
+  }
+
+  if (!thesis.setup) {
+    content.innerHTML = '<p style="color:var(--text3)">No thesis data returned.</p>';
+  } else {
+    const cats = (thesis.catalyst_types || [])
+      .map(c => `<span class="chip chip-${c}">${c}</span>`).join('');
+
+    content.innerHTML = `
+      <div class="stat-row"><span class="stat-label">Confidence</span>
+        <span class="stat-value" style="color:var(--accent3)">${thesis.confidence?.toFixed(0)||'—'}%</span></div>
+      <div class="stat-row"><span class="stat-label">Time Horizon</span>
+        <span class="stat-value">${thesis.time_horizon||'—'}</span></div>
+      <div class="stat-row"><span class="stat-label">Score</span>
+        <span class="stat-value">${thesis.bullish_score?.toFixed(0)||data.score?.toFixed(0)||'—'}</span></div>
+      <div style="margin:16px 0 8px;font-size:11px;font-family:var(--font-mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Catalysts</div>
+      <div>${cats || '<span style="color:var(--text3)">None identified</span>'}</div>
+      <div style="margin-top:16px">
+        ${block('Setup', thesis.setup)}
+        ${block('Trigger', thesis.trigger)}
+        ${block('Mechanics', thesis.mechanics)}
+        ${block('Risk', thesis.risk, 'var(--accent2)')}
+      </div>`;
+  }
+
+  openModal('thesisModal');
+}
+
+function block(label, text, color='var(--accent)') {
+  if (!text) return '';
+  return `
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:${color};margin-bottom:5px">${label}</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6">${text}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPLAIN SCORE MODAL
+// ═══════════════════════════════════════════════════════
+async function openExplainModal(ticker, scoreData) {
+  document.getElementById('explainTicker').textContent = ticker;
+  document.getElementById('explainContent').innerHTML =
+    '<div style="text-align:center;padding:30px"><div class="spinner"></div><br><span style="color:var(--text3);font-size:12px">Generating explanation...</span></div>';
+  openModal('explainModal');
+
+  try {
+    const r = await fetch('/api/explain-score', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(scoreData)
+    });
+    const data = await r.json();
+
+    document.getElementById('explainContent').innerHTML = `
+      <div class="explanation-box">
+        <h4>Score Breakdown</h4>
+        <p>${data.score_breakdown}</p>
+      </div>
+      <div style="margin-top:12px">
+        ${block('Strongest Factor', data.strongest_factor, 'var(--accent3)')}
+        ${block('Weakest Factor', data.weakest_factor, 'var(--accent2)')}
+        ${block('vs Typical Candidates', data.comparison)}
+        ${block('Recommendation', data.recommendation, 'var(--accent4)')}
+      </div>`;
+  } catch(e) {
+    document.getElementById('explainContent').innerHTML =
+      `<p style="color:var(--accent2)">Error: ${e.message}</p>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// RE-EVALUATE
+// ═══════════════════════════════════════════════════════
+async function reEvaluate(ticker) {
+  // Show loading state on the card
+  const card = document.getElementById(`card-${ticker}`);
+  if (card) {
+    const btn = card.querySelector('[onclick*="reEvaluate"]');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  }
+
+  try {
+    // Step 1: Re-fetch fresh SI data from Yahoo → update DB
+    const refreshResp = await fetch(`/api/ticker/refresh/${ticker}`, {method: 'POST'});
+    if (refreshResp.ok) {
+      const d = await refreshResp.json();
+
+      // Update card metrics live without full re-render
+      if (card) {
+        const metrics = card.querySelectorAll('.metric-value');
+        // Find and update specific metric cells by their label
+        card.querySelectorAll('.metric-item').forEach(item => {
+          const label = item.querySelector('.metric-label')?.textContent?.trim();
+          const valEl = item.querySelector('.metric-value');
+          if (!valEl) return;
+          if (label === 'SHORT %')       valEl.textContent = `${(d.short_float||0).toFixed(1)}%`;
+          if (label === 'DAYS TO COVER') valEl.textContent = (d.days_to_cover||0).toFixed(1);
+          if (label === 'VOL RATIO')     valEl.textContent = `${(d.volume_ratio||0).toFixed(1)}x`;
+          if (label === 'PRICE')         valEl.textContent = `$${(d.price||0).toFixed(2)}`;
+          if (label === 'SI TREND') {
+            const icons = {'RISING':'↑','FALLING':'↓','FLAT':'→'};
+            const trend = d.si_trend || 'FLAT';
+            valEl.textContent = `${icons[trend]||'→'} ${trend}`;
+            valEl.className = `metric-value ${trend==='RISING'?'trend-rising':trend==='FALLING'?'trend-falling':'trend-flat'}`;
+          }
+        });
+
+        // Flash the card to show it updated
+        card.style.borderColor = 'var(--accent3)';
+        setTimeout(() => card.style.borderColor = '', 1500);
+      }
+    }
+
+    // Step 2: Lifecycle re-evaluation
+    const evalResp = await fetch('/api/lifecycle/evaluate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ticker})
+    });
+    if (evalResp.ok) {
+      const evalData = await evalResp.json();
+      const status = evalData.snapshot?.status || 'ACTIVE';
+      if (status !== 'ACTIVE') {
+        // Show status change notification
+        const banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;top:80px;right:20px;background:var(--surface);border:1px solid var(--accent2);border-radius:6px;padding:12px 16px;font-family:var(--font-mono);font-size:12px;z-index:300;';
+        banner.innerHTML = `${ticker}: status → <span style="color:var(--accent2)">${status}</span>`;
+        document.body.appendChild(banner);
+        setTimeout(() => banner.remove(), 4000);
+      }
+    }
+
+  } catch(e) {
+    console.error('reEvaluate error:', e);
+  } finally {
+    if (card) {
+      const btn = card.querySelector('[disabled]');
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Re-eval'; }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// SCENARIO PLANNER
+// ═══════════════════════════════════════════════════════
+// Module-level store for Claude's recommendation
+let _claudeOptionsRec = null;
+
+function loadToScenario(ticker, price) {
+  document.getElementById('sp_ticker').value = ticker;
+  document.getElementById('sp_entry').value = price.toFixed(2);
+  document.getElementById('sp_bullish_exit').value = (price * 1.5).toFixed(2);
+  document.getElementById('sp_bearish_target').value = (price * 0.60).toFixed(2);
+  document.getElementById('sp_peak').value = (price * 1.7).toFixed(2);
+  // Clear old recommendation
+  _claudeOptionsRec = null;
+  document.getElementById('claudeOptionsPanel').style.display = 'none';
+  switchTab('scenario');
+}
+
+async function getClaudeOptions() {
+  const ticker  = document.getElementById('sp_ticker').value.trim().toUpperCase();
+  const entry   = parseFloat(document.getElementById('sp_entry').value) || 0;
+  const peak    = parseFloat(document.getElementById('sp_peak').value) || 0;
+  const bearish = parseFloat(document.getElementById('sp_bearish_target').value) || 0;
+  const capital = parseFloat(document.getElementById('sp_capital').value) || 15000;
+
+  if (!ticker) { alert('Enter a ticker first.'); return; }
+
+  const btn = document.getElementById('btnGetOptions');
+  btn.disabled = true;
+  btn.textContent = '⏳ Asking Claude...';
+  document.getElementById('claudeOptionsPanel').style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/options/recommend/${ticker}`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ entry_price: entry, peak_price: peak, bearish_target: bearish, capital })
+    });
+    const data = await r.json();
+    _claudeOptionsRec = data;
+    renderClaudeOptions(data);
+  } catch(e) {
+    alert('Claude options recommendation failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🤖 Ask Claude to Recommend Options';
+  }
+}
+
+function renderClaudeOptions(data) {
+  document.getElementById('claudeOptionsPanel').style.display = 'block';
+  document.getElementById('claudeOptionsSummary').textContent = data.summary || '';
+
+  const call = data.call || {};
+  const altCall = data.alternative_call || {};
+  const put  = data.put  || {};
+
+  document.getElementById('claudeCallDetails').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div><span style="color:var(--text3)">Strike:</span> <b>$${call.strike?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Expiry:</span> <b>${call.expiry_label||call.expiry||'—'}</b></div>
+      <div><span style="color:var(--text3)">Est. Premium:</span> <b>$${call.est_premium?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Contracts:</span> <b>${call.contracts_for_capital||'—'}</b></div>
+      <div><span style="color:var(--text3)">Breakeven:</span> <b>$${call.breakeven?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Max Loss:</span> <b>$${(call.max_loss||0).toLocaleString()}</b></div>
+    </div>
+    <div style="margin-top:6px;color:var(--text3)">${call.rationale||''}</div>`;
+
+  document.getElementById('claudeAltCallDetails').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div><span style="color:var(--text3)">Strike:</span> <b>$${altCall.strike?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Expiry:</span> <b>${altCall.expiry_label||altCall.expiry||'—'}</b></div>
+      <div><span style="color:var(--text3)">Est. Premium:</span> <b>$${altCall.est_premium?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Contracts:</span> <b>${altCall.contracts_for_capital||'—'}</b></div>
+      <div><span style="color:var(--text3)">Breakeven:</span> <b>$${altCall.breakeven?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Max Loss:</span> <b>$${(altCall.max_loss||0).toLocaleString()}</b></div>
+    </div>
+    <div style="margin-top:6px;color:var(--text3)">${altCall.rationale||''}</div>`;
+
+  document.getElementById('claudePutDetails').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div><span style="color:var(--text3)">Strike:</span> <b>$${put.strike?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Expiry:</span> <b>${put.expiry_label||put.expiry||'—'}</b></div>
+      <div><span style="color:var(--text3)">Est. Premium:</span> <b>$${put.est_premium?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Contracts:</span> <b>${put.contracts_for_capital||'—'}</b></div>
+      <div><span style="color:var(--text3)">Breakeven:</span> <b>$${put.breakeven?.toFixed(2)||'—'}</b></div>
+      <div><span style="color:var(--text3)">Max Loss:</span> <b>$${(put.max_loss||0).toLocaleString()}</b></div>
+    </div>
+    <div style="margin-top:6px;color:var(--text3)">${put.rationale||''}</div>`;
+}
+
+function applyClaudeCall() {
+  if (!_claudeOptionsRec?.call) return;
+  const c = _claudeOptionsRec.call;
+  document.getElementById('sp_call_strike').value  = c.strike?.toFixed(2) || '';
+  document.getElementById('sp_call_expiry').value  = c.expiry || '';
+  document.getElementById('sp_call_entry').value   = c.est_premium?.toFixed(2) || '';
+  document.getElementById('sp_call_exit').value    = '';
+}
+
+function applyClaudeAltCall() {
+  if (!_claudeOptionsRec?.alternative_call) return;
+  const c = _claudeOptionsRec.alternative_call;
+  document.getElementById('sp_call_strike').value  = c.strike?.toFixed(2) || '';
+  document.getElementById('sp_call_expiry').value  = c.expiry || '';
+  document.getElementById('sp_call_entry').value   = c.est_premium?.toFixed(2) || '';
+  document.getElementById('sp_call_exit').value    = '';
+}
+
+function applyClaudePut() {
+  if (!_claudeOptionsRec?.put) return;
+  const p = _claudeOptionsRec.put;
+  document.getElementById('sp_put_strike').value   = p.strike?.toFixed(2) || '';
+  document.getElementById('sp_put_expiry').value   = p.expiry || '';
+  document.getElementById('sp_put_entry').value    = p.est_premium?.toFixed(2) || '';
+  document.getElementById('sp_put_exit').value     = '';
+}
+
+async function calculateScenarios() {
+  const ticker = document.getElementById('sp_ticker').value.trim().toUpperCase();
+  const entry = parseFloat(document.getElementById('sp_entry').value);
+  const bullish = parseFloat(document.getElementById('sp_bullish_exit').value);
+  const bearish = parseFloat(document.getElementById('sp_bearish_target').value);
+
+  if (!ticker || !entry || !bullish || !bearish) {
+    alert('Ticker, Entry Price, Bullish Exit, and Bearish Target are required.');
+    return;
+  }
+
+  const callStrike = parseFloat(document.getElementById('sp_call_strike').value) || null;
+  const putStrike  = parseFloat(document.getElementById('sp_put_strike').value)  || null;
+
+  const payload = {
+    ticker,
+    entry_price:        entry,
+    bullish_exit:       bullish,
+    bearish_target:     bearish,
+    peak_price:         parseFloat(document.getElementById('sp_peak').value) || null,
+    capital:            parseFloat(document.getElementById('sp_capital').value) || null,
+    call_strike_override: callStrike,
+    put_strike_override:  putStrike,
+    call_entry_override:  parseFloat(document.getElementById('sp_call_entry').value) || null,
+    call_exit_override:   parseFloat(document.getElementById('sp_call_exit').value)  || null,
+    put_entry_override:   parseFloat(document.getElementById('sp_put_entry').value)  || null,
+    put_exit_override:    parseFloat(document.getElementById('sp_put_exit').value)   || null,
+  };
+
+  const btn = document.getElementById('btnCalculate');
+  btn.disabled = true; btn.textContent = '⏳ Calculating...';
+
+  try {
+    const r = await fetch('/api/scenarios/calculate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    renderScenarios(data);
+  } catch(e) {
+    alert('Calculation failed: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Calculate Scenarios';
+  }
+}
+
+function fmt$(v)  { return '$' + (v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtN(v)  { return (v||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function fmtPnl(v){ const s = v>=0?'+':'-'; return `${s}$${Math.abs(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`; }
+function fmtPct(v){ return `${v>=0?'+':''}${(v||0).toFixed(1)}%`; }
+function pnlColor(v){ return v >= 0 ? 'var(--accent3)' : 'var(--accent2)'; }
+
+function mathRow(label, value, color='var(--text2)', bold=false) {
+  return `<tr>
+    <td style="padding:5px 10px;color:var(--text3);font-size:11px;font-family:var(--font-mono)">${label}</td>
+    <td style="padding:5px 10px;text-align:right;font-size:12px;font-family:var(--font-mono);color:${color};${bold?'font-weight:700':''}">
+      ${value}
+    </td>
+  </tr>`;
+}
+
+function renderScenarios(data) {
+  const container = document.getElementById('scenarioResults');
+  const sa   = data.scenario_a  || {};
+  const sb   = data.scenario_b  || {};
+  const sc   = data.scenario_c  || {};
+  const comb = data.combined_ac || {};
+  const opts = data.options_used || {};
+
+  const tbl = (rows) => `<table style="width:100%;border-collapse:collapse;background:var(--surface2);border-radius:var(--radius);overflow:hidden">${rows}</table>`;
+  const divider = `<tr><td colspan="2" style="padding:0;height:1px;background:var(--border)"></td></tr>`;
+
+  container.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div>
+        <span style="font-size:18px;font-weight:800">${data.ticker}</span>
+        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text3);margin-left:10px">
+          Capital: ${fmt$(data.capital)} | Entry: ${fmt$(data.entry_price)}
+        </span>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:11px;color:var(--text3)">
+        Bullish exit: ${fmt$(data.bullish_exit)} | Bearish target: ${fmt$(data.bearish_target)}
+      </div>
+    </div>
+
+    <!-- ── Scenario A: Long Stock ── -->
+    <div class="scenario-card" style="margin-bottom:12px">
+      <div class="scenario-header" style="margin-bottom:12px">
+        <span class="scenario-label">📈 Scenario A — Long Stock</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:${pnlColor(sa.pnl)}">${fmtPnl(sa.pnl)} <span style="font-size:12px">${fmtPct(sa.pct)}</span></span>
+      </div>
+      ${tbl(`
+        ${mathRow('Capital Allocated', fmt$(sa.capital))}
+        ${mathRow('Entry Price per Share', fmt$(sa.entry_price))}
+        ${divider}
+        ${mathRow('Shares Purchased', fmtN(sa.quantity) + ' shares', 'var(--accent4)', true)}
+        ${mathRow('Total Cost to Enter', fmt$(sa.entry_cost))}
+        ${divider}
+        ${mathRow('Exit Price per Share', fmt$(sa.exit_price))}
+        ${mathRow('Exit Value', fmt$(sa.exit_value), 'var(--accent3)', true)}
+        ${mathRow('Math', `${fmtN(sa.quantity)} shares × ${fmt$(sa.exit_price)} = ${fmt$(sa.exit_value)}`)}
+        ${divider}
+        ${mathRow('PROFIT / LOSS', fmtPnl(sa.pnl), pnlColor(sa.pnl), true)}
+        ${mathRow('Return', fmtPct(sa.pct), pnlColor(sa.pnl))}
+      `)}
+    </div>
+
+    <!-- ── Scenario B: Call Options ── -->
+    <div class="scenario-card" style="margin-bottom:12px">
+      <div class="scenario-header" style="margin-bottom:12px">
+        <span class="scenario-label">📊 Scenario B — Call Options (Bullish)</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:${pnlColor(sb.pnl)}">${fmtPnl(sb.pnl)} <span style="font-size:12px">${fmtPct(sb.pct)}</span></span>
+      </div>
+      ${tbl(`
+        ${mathRow('Capital Allocated', fmt$(sb.capital))}
+        ${mathRow('Strategy', sb.notes || 'Call options')}
+        ${divider}
+        ${mathRow('Contracts Purchased', fmtN(sb.quantity) + ' contracts', 'var(--accent4)', true)}
+        ${mathRow('Cost per Contract', fmt$(sb.quantity > 0 ? sb.entry_cost / sb.quantity : 0))}
+        ${mathRow('Total Entry Cost', fmt$(sb.entry_cost))}
+        ${divider}
+        ${mathRow('Exit Value', fmt$(sb.exit_value), 'var(--accent3)', true)}
+        ${mathRow('Math', `${fmtN(sb.quantity)} contracts × 100 shares = leverage on ${fmtN(sb.quantity * 100)} shares`)}
+        ${divider}
+        ${mathRow('PROFIT / LOSS', fmtPnl(sb.pnl), pnlColor(sb.pnl), true)}
+        ${mathRow('Return vs Capital', fmtPct(sb.pct), pnlColor(sb.pnl))}
+        ${opts.call_strike ? mathRow('Call Strike / IV', `$${opts.call_strike} | IV ${opts.iv_pct?.toFixed(0)||'~60'}%`) : ''}
+      `)}
+    </div>
+
+    <!-- ── Scenario C: Put Options ── -->
+    <div class="scenario-card" style="margin-bottom:12px">
+      <div class="scenario-header" style="margin-bottom:12px">
+        <span class="scenario-label">📉 Scenario C — Put Options (Post-Squeeze Short)</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:${pnlColor(sc.pnl)}">${fmtPnl(sc.pnl)} <span style="font-size:12px">${fmtPct(sc.pct)}</span></span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--font-mono)">
+        Enter puts at squeeze peak (${fmt$(data.peak_price)}) → exit at bearish target (${fmt$(data.bearish_target)})
+      </div>
+      ${tbl(`
+        ${mathRow('Capital Allocated', fmt$(sc.capital))}
+        ${mathRow('Entry (at squeeze peak)', fmt$(sc.entry_price))}
+        ${mathRow('Target Exit Price', fmt$(sc.exit_price))}
+        ${divider}
+        ${mathRow('Put Contracts', fmtN(sc.quantity) + ' contracts', 'var(--accent4)', true)}
+        ${mathRow('Total Entry Cost', fmt$(sc.entry_cost))}
+        ${divider}
+        ${mathRow('Exit Value', fmt$(sc.exit_value), 'var(--accent3)', true)}
+        ${mathRow('Strategy', sc.notes || 'Put options on reversal')}
+        ${divider}
+        ${mathRow('PROFIT / LOSS', fmtPnl(sc.pnl), pnlColor(sc.pnl), true)}
+        ${mathRow('Return vs Capital', fmtPct(sc.pct), pnlColor(sc.pnl))}
+      `)}
+    </div>
+
+    <!-- ── Combined A + C ── -->
+    <div class="scenario-card" style="border-color:var(--accent)">
+      <div class="scenario-header" style="margin-bottom:12px">
+        <span class="scenario-label">🎯 Combined Strategy — Long Stock + Put Hedge</span>
+        <span style="font-family:var(--font-mono);font-size:15px;font-weight:700;color:${pnlColor(comb.pnl)}">${fmtPnl(comb.pnl)} <span style="font-size:12px">${fmtPct(comb.pct)}</span></span>
+      </div>
+      ${tbl(`
+        ${mathRow('Scenario A P&L', fmtPnl(sa.pnl), pnlColor(sa.pnl))}
+        ${mathRow('Scenario C P&L', fmtPnl(sc.pnl), pnlColor(sc.pnl))}
+        ${divider}
+        ${mathRow('TOTAL COMBINED P&L', fmtPnl(comb.pnl), pnlColor(comb.pnl), true)}
+        ${mathRow('Combined Return', fmtPct(comb.pct), pnlColor(comb.pnl), true)}
+        ${mathRow('Total Capital Used', fmt$((sa.entry_cost||0) + (sc.entry_cost||0)))}
+      `)}
+      <div style="margin-top:10px;font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Strategy: Buy stock at detection + buy puts at squeeze peak for full cycle capture
+      </div>
+    </div>
+
+    ${opts.call_strike || opts.put_strike ? `
+      <div style="margin-top:10px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);font-family:var(--font-mono);font-size:10px;color:var(--text3)">
+        Options pricing (Black-Scholes): Call strike $${opts.call_strike||'N/A'} | Put strike $${opts.put_strike||'N/A'} | IV ${opts.iv_pct?.toFixed(0)||'~60'}% | Premiums are estimates — enter actuals above for precise math
+      </div>` : `
+      <div style="margin-top:10px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);font-family:var(--font-mono);font-size:10px;color:var(--text3)">
+        ⚠ No options chain data — using Black-Scholes estimates with 60% IV. Enter actual premiums above for exact P&L.
+      </div>`}
+  `;
+}
+
+function scenarioCard(label, s, isBearish=false) {
+  if (!s) return '';
+  const isPos = s.pnl >= 0;
+  const colorClass = isPos ? 'pnl-positive' : 'pnl-negative';
+  const sign = isPos ? '+' : '';
+  const pnlFmt = `${sign}$${Math.abs(s.pnl).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+  const pctFmt = `${sign}${s.pct?.toFixed(1)}%`;
+  return `
+    <div class="scenario-card">
+      <div class="scenario-header">
+        <span class="scenario-label">${label}</span>
+        <span class="scenario-pnl ${colorClass}">${pnlFmt}<span class="pnl-pct">${pctFmt}</span></span>
+      </div>
+      <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">${s.notes||''}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// INTAKE / UNIVERSE
+// ═══════════════════════════════════════════════════════
+async function loadUniverse() {
+  try {
+    const r = await fetch('/api/universe');
+    const data = await r.json();
+    const grid = document.getElementById('universeGrid');
+    document.getElementById('universeCount').textContent = data.filter(d=>d.active).length;
+
+    if (!data.length) {
+      grid.innerHTML = '<span style="color:var(--text3)">Universe is empty. Click "Build from Web" to populate.</span>';
+      return;
+    }
+
+    grid.innerHTML = data.filter(d => d.active).map(d => `
+      <div class="universe-chip">
+        <span style="font-weight:700">${d.ticker}</span>
+        <span class="source">${d.source || '—'}</span>
+        <span class="del" onclick="removeFromUniverse('${d.ticker}')">×</span>
+      </div>`).join('');
+  } catch(e) { console.error('loadUniverse:', e); }
+}
+
+async function buildUniverse() {
+  const btn = document.getElementById('btnBuildUniverse');
+  btn.disabled = true;
+  btn.textContent = '⏳ Building...';
+  document.getElementById('universeStatus').textContent = 'Fetching from web sources...';
+
+  try {
+    const r = await fetch('/api/universe/build', {method:'POST'});
+    const data = await r.json();
+    document.getElementById('universeStatus').textContent = `Added ${data.added} new tickers`;
+    await loadUniverse();
+  } catch(e) {
+    document.getElementById('universeStatus').textContent = 'Error: ' + e.message;
+  }
+  btn.disabled = false;
+  btn.textContent = '🌐 Build from Web';
+}
+
+async function removeFromUniverse(ticker) {
+  await fetch(`/api/universe/${ticker}`, {method:'DELETE'});
+  loadUniverse();
+}
+
+async function addManualTicker() {
+  const ticker = document.getElementById('manualTicker').value.trim().toUpperCase();
+  if (!ticker) return;
+  await fetch('/api/universe/add', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ticker, source: 'manual'})
+  });
+  document.getElementById('manualTicker').value = '';
+  closeModal('addTickerModal');
+  loadUniverse();
+}
+
+// ═══════════════════════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════════════════════
+async function loadHistory() {
+  try {
+    const r = await fetch('/api/history');
+    const data = await r.json();
+    const tbody = document.getElementById('historyBody');
+
+    if (!data.length) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:40px">No completed squeeze cycles yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.map(h => {
+      const peakChg = (h.price_chg_peak || 0).toFixed(1);
+      const siChg = (h.si_change_pct || 0).toFixed(1);
+      const peakColor = h.price_chg_peak < 0 ? 'var(--accent2)' : 'var(--accent3)';
+      const siColor = h.si_change_pct < 0 ? 'var(--accent3)' : 'var(--accent2)';
+
+      return `
+        <tr>
+          <td class="mono" style="font-weight:700">${h.ticker}</td>
+          <td><span class="badge badge-${(h.status||'failed').toLowerCase()}">${h.status}</span></td>
+          <td class="mono">$${(h.entry_price||0).toFixed(2)}</td>
+          <td class="mono">$${(h.peak_price||0).toFixed(2)}</td>
+          <td class="mono">$${(h.current_price||0).toFixed(2)}</td>
+          <td class="mono" style="color:${peakColor}">${peakChg}%</td>
+          <td class="mono" style="color:${siColor}">${siChg}%</td>
+          <td style="font-size:11px;color:var(--text2)">${h.eval_triggered||'—'}</td>
+          <td class="mono" style="color:var(--text3)">${h.snapshot_date||'—'}</td>
+          <td class="mono">${h.confidence ? h.confidence.toFixed(0)+'%' : '—'}</td>
+        </tr>`;
+    }).join('');
+  } catch(e) { console.error('loadHistory:', e); }
+}
+
+// ═══════════════════════════════════════════════════════
+// LOGS
+// ═══════════════════════════════════════════════════════
+let currentLogFilter = '';
+
+function setLogFilter(btn, filter) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentLogFilter = filter;
+  loadLogs();
+}
+
+async function loadLogs() {
+  try {
+    const url = `/api/logs?limit=200${currentLogFilter ? '&filter=' + encodeURIComponent(currentLogFilter) : ''}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const container = document.getElementById('logContainer');
+
+    if (!data.lines || !data.lines.length) {
+      container.innerHTML = '<span style="color:var(--text3)">No log entries matching filter.</span>';
+      return;
+    }
+
+    container.innerHTML = data.lines.map(line => {
+      let cls = 'log-info';
+      if (/ERROR/i.test(line)) cls = 'log-error';
+      else if (/WARNING/i.test(line)) cls = 'log-warning';
+      else if (/ReAct/i.test(line)) cls = 'log-react';
+      else if (/MapReduce/i.test(line)) cls = 'log-mapreduce';
+      else if (/rag/i.test(line)) cls = 'log-rag';
+      else if (/memory/i.test(line)) cls = 'log-memory';
+      else if (/[Tt]hesis/i.test(line)) cls = 'log-thesis';
+
+      return `<div class="log-line ${cls}">${escapeHtml(line)}</div>`;
+    }).join('');
+  } catch(e) { console.error('loadLogs:', e); }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    const data = await r.json();
+    document.getElementById('set_capital').value = data.capital_per_scenario || '15000';
+    document.getElementById('set_portfolio_size').value = data.portfolio_size || '10';
+    document.getElementById('set_min_score').value = data.min_score_threshold || '40';
+    document.getElementById('set_mc_floor').value = data.mc_floor || '250000000';
+    document.getElementById('set_put_oi').value = data.put_oi_threshold || '500';
+    document.getElementById('set_auto_eval').value = data.auto_eval_hours || '72';
+    document.getElementById('set_universe_size').value = data.universe_size || '30';
+    document.getElementById('set_yahoo_pages').value = data.yahoo_screener_pages || '5';
+    document.getElementById('set_yahoo_delay').value = data.yahoo_page_delay || '5';
+
+    // Pre-populate scenario capital
+    document.getElementById('sp_capital').placeholder = data.capital_per_scenario || '15000';
+  } catch(e) { console.error('loadSettings:', e); }
+}
+
+async function saveSettings() {
+  const settings = {
+    capital_per_scenario: document.getElementById('set_capital').value,
+    portfolio_size: document.getElementById('set_portfolio_size').value,
+    min_score_threshold: document.getElementById('set_min_score').value,
+    mc_floor: document.getElementById('set_mc_floor').value,
+    put_oi_threshold: document.getElementById('set_put_oi').value,
+    auto_eval_hours: document.getElementById('set_auto_eval').value,
+    universe_size: document.getElementById('set_universe_size').value,
+    yahoo_screener_pages: document.getElementById('set_yahoo_pages').value,
+    yahoo_page_delay: document.getElementById('set_yahoo_delay').value,
+  };
+
+  try {
+    await fetch('/api/settings', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({settings})
+    });
+    const btn = document.getElementById('btnSaveSettings');
+    btn.textContent = '✓ Saved';
+    setTimeout(() => btn.textContent = 'Save Settings', 2000);
+  } catch(e) { alert('Save failed: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════
+// RUNS TAB
+// ═══════════════════════════════════════════════════════
+async function loadRunsTab() {
+  try {
+    const r = await fetch('/api/screen/runs?limit=30');
+    const runs = await r.json();
+    const tbody = document.getElementById('runsTableBody');
+    if (!runs.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:30px">No runs yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = runs.map((run, i) => {
+      const delta = run.delta ?? 0;
+      const deltaHtml = delta > 0
+        ? `<span style="color:var(--accent3)">+${delta}</span>`
+        : delta < 0 ? `<span style="color:var(--accent2)">${delta}</span>`
+        : `<span style="color:var(--text3)">${i===runs.length-1?'First':'±0'}</span>`;
+      const ts = run.run_at ? new Date(run.run_at+' UTC').toLocaleString() : '—';
+      const isLatest = i === 0;
+      return `<tr style="${isLatest?'background:rgba(0,229,255,0.04)':''}">
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:11px;color:var(--text3)">${run.run_id}${isLatest?' <span style="color:var(--accent);font-size:9px">LATEST</span>':''}</td>
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:11px;color:var(--text2)">${ts}</td>
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:12px;text-align:right">${run.tickers_screened}</td>
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;font-weight:700">${run.candidates_found}</td>
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--accent3)">${run.new_tickers}</td>
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--accent4)">${run.updated_tickers}</td>
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:12px;text-align:right;font-weight:700">${run.total_in_db}</td>
+        <td style="padding:9px 14px;font-family:var(--font-mono);font-size:12px;text-align:right">${deltaHtml}</td>
+        <td style="padding:9px 14px;text-align:center">
+          <button class="btn btn-ghost btn-sm" onclick="loadRunDetail('${run.run_id}')">▶</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) { console.error('loadRunsTab:', e); }
+}
+
+async function loadRunDetail(runId) {
+  document.getElementById('runDetailPanel').style.display = 'block';
+  document.getElementById('runDetailId').textContent = runId;
+  try {
+    const r = await fetch(`/api/runs/detail/${runId}`);
+    const details = await r.json();
+    const tbody = document.getElementById('runDetailBody');
+    if (!details.length) {
+      tbody.innerHTML = '<tr><td colspan="10" style="color:var(--text3);padding:16px;text-align:center">No detail records for this run.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = details.map(d => `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-weight:700">${d.ticker}</td>
+        <td style="padding:7px 12px;text-align:center">${d.used_massive?'<span style="color:var(--accent3)">✓</span>':'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="padding:7px 12px;text-align:center">${d.used_finviz?'<span style="color:var(--accent3)">✓</span>':'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-size:10px;${d.db_operation==='INSERT'?'color:var(--accent3)':'color:var(--accent4)'}">${d.db_operation||'—'}</td>
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">${d.db_write_time||'—'}</td>
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">${d.llm_time||'—'}</td>
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">${d.rag_time||'—'}</td>
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">${d.chromadb_time||'—'}</td>
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">${d.agent_time||'—'}</td>
+        <td style="padding:7px 12px;font-family:var(--font-mono);font-size:10px;color:var(--accent2)">${d.error||''}</td>
+      </tr>`).join('');
+  } catch(e) { console.error('loadRunDetail:', e); }
+}
+
+// ═══════════════════════════════════════════════════════
+// PREDICTIONS TAB
+// ═══════════════════════════════════════════════════════
+let predFilter = 'ALL';
+
+function filterPredictions(btn, status) {
+  document.querySelectorAll('#tab-predictions .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  predFilter = status;
+  loadPredictionsTab();
+}
+
+async function loadPredictionsTab() {
+  // Load calibration stats
+  try {
+    const r = await fetch('/api/predictions/calibration');
+    const cal = await r.json();
+    if (cal.total >= 5) {
+      document.getElementById('calibrationBanner').style.display = 'block';
+      const grid = document.getElementById('calibrationGrid');
+      grid.innerHTML = `
+        <div>
+          <div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">TOTAL PREDICTIONS</div>
+          <div style="font-family:var(--font-mono);font-size:24px;font-weight:700">${cal.total}</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">ACCURACY</div>
+          <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:${cal.overall_accuracy>=60?'var(--accent3)':'var(--accent2)'}">${cal.overall_accuracy}%</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">AVG P&L</div>
+          <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:${cal.avg_pnl_pct>=0?'var(--accent3)':'var(--accent2)'}">${cal.avg_pnl_pct>=0?'+':''}${cal.avg_pnl_pct}%</div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">HITS</div>
+          <div style="font-family:var(--font-mono);font-size:24px;font-weight:700;color:var(--accent3)">${cal.hits}</div>
+        </div>`;
+    }
+  } catch(e) {}
+
+  // Load predictions
+  try {
+    const r = await fetch(`/api/predictions?status=${predFilter}&limit=100`);
+    const preds = await r.json();
+    const tbody = document.getElementById('predictionsBody');
+    if (!preds.length) {
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text3);padding:30px">No predictions yet.</td></tr>';
+      return;
+    }
+    const outcomeColor = {HIT:'var(--accent3)',MISS:'var(--accent2)',PARTIAL:'var(--accent4)',REVERSAL:'var(--accent2)',EXPIRED:'var(--text3)'};
+    tbody.innerHTML = preds.map(p => {
+      const pnlColor = (p.outcome_pnl_pct||0) >= 0 ? 'var(--accent3)' : 'var(--accent2)';
+      const cats = (() => { try { return JSON.parse(p.catalyst_types||'[]').slice(0,2).join(', '); } catch { return ''; } })();
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-weight:700">${p.ticker}</td>
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-size:11px;color:var(--text3)">${p.prediction_date}</td>
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-size:11px;color:${p.direction==='UP'?'var(--accent3)':'var(--accent2)'}">${p.direction==='UP'?'↑ UP':'↓ DOWN'}</td>
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-size:12px;text-align:right">$${(p.entry_price||0).toFixed(2)}</td>
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-size:12px;text-align:right">$${(p.target_price||0).toFixed(2)}</td>
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-size:12px;text-align:right;color:var(--accent4)">${(p.confidence||0).toFixed(0)}%</td>
+        <td style="padding:8px 12px;font-size:11px;color:var(--text2)">${p.time_horizon||'—'}</td>
+        <td style="padding:8px 12px"><span class="badge ${p.status==='OPEN'?'badge-active':'badge-failed'}">${p.status}</span></td>
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-size:11px;color:${outcomeColor[p.outcome]||'var(--text3)'}">${p.outcome||'—'}</td>
+        <td style="padding:8px 12px;font-family:var(--font-mono);font-size:12px;text-align:right;color:${pnlColor}">${p.outcome_pnl_pct!=null?(p.outcome_pnl_pct>=0?'+':'')+p.outcome_pnl_pct+'%':'—'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) { console.error('loadPredictionsTab:', e); }
+
+  // Load lessons
+  try {
+    const r = await fetch('/api/predictions/lessons');
+    const lessons = await r.json();
+    const container = document.getElementById('lessonsContainer');
+    if (!lessons.length) {
+      container.innerHTML = '<p style="color:var(--text3);font-size:13px">No lessons generated yet (requires 10+ completed predictions).</p>';
+      return;
+    }
+    container.innerHTML = lessons.map(l => `
+      <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:var(--radius);padding:16px;margin-bottom:12px">
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">
+          Cycle ${l.cycle_number} — ${l.prediction_count} predictions — ${l.created_at}
+        </div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7;white-space:pre-line">${l.lessons_text}</div>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+async function triggerEvaluation() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳ Evaluating...';
+  try {
+    await fetch('/api/predictions/evaluate-now', {method:'POST'});
+    await loadPredictionsTab();
+    btn.textContent = '✓ Done';
+    setTimeout(() => { btn.disabled=false; btn.textContent='▶ Evaluate Now'; }, 2000);
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '▶ Evaluate Now';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// BILLING TAB
+// ═══════════════════════════════════════════════════════
+async function loadBillingTab() {
+  try {
+    const r = await fetch('/api/health');
+    const data = await r.json();
+
+    const setKey = (id, dotId, hasKey) => {
+      document.getElementById(id).textContent = hasKey ? '✓ Configured' : '✗ Missing — check .env';
+      document.getElementById(id).style.color = hasKey ? 'var(--accent3)' : 'var(--accent2)';
+      const dot = document.getElementById(dotId);
+      if (dot) {
+        dot.style.background = hasKey ? 'var(--accent3)' : 'var(--accent2)';
+        dot.style.boxShadow = hasKey ? '0 0 8px var(--accent3)' : '0 0 8px var(--accent2)';
+      }
+    };
+
+    setKey('key_anthropic', 'dot_anthropic', data.anthropic_key);
+    setKey('key_massive',   'dot_massive',   data.massive_key);
+    setKey('key_tavily',    'dot_tavily',    data.tavily_key);
+    setKey('key_finnhub',   'dot_finnhub',   data.finnhub_key);
+  } catch(e) { console.error('loadBillingTab:', e); }
+}
+</script>
+</body>
+</html>
