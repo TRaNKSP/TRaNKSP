@@ -28,7 +28,7 @@ from .yahoo_quote import YahooQuoteSession
 from .finnhub_client import get_short_interest as _fh_get_si  # used only if FINNHUB_API_KEY set
 # from .marketbeat_client import get_short_interest as _mb_get_si  # MarketBeat (403ing — disabled)
 from .learning_engine import (
-    format_calibration_for_prompt, query_episode_memory, save_prediction
+    format_calibration_for_prompt, query_episode_memory
 )
 from .run_tracker import save_run_detail
 from .prediction_tracker import record_prediction as _record_pred
@@ -372,9 +372,9 @@ async def generate_ticker_thesis(
     calibration_context = format_calibration_for_prompt()
 
     # Claude universe context — reasoning Claude already generated for this ticker
-    state_settings = candidate.get("_settings", {})
+    state_settings    = candidate.get("_settings", {})
     claude_candidates = state_settings.get("_claude_candidates", {})
-    claude_ctx = claude_candidates.get(ticker, {})
+    claude_ctx        = claude_candidates.get(ticker, {})
     claude_universe_context = ""
     if claude_ctx:
         claude_universe_context = (
@@ -399,9 +399,9 @@ async def generate_ticker_thesis(
         "si_trend":      candidate["si_trend"]
     }
 
-    # Inject learning context into lifecycle context
+    # Build adaptive context from all learning layers
     from .learning_engine import get_latest_lessons
-    lessons = get_latest_lessons()
+    lessons          = get_latest_lessons()
     lifecycle_context = format_history_for_context(ticker)
     adaptive_context = "\n\n".join(filter(None, [
         claude_universe_context,
@@ -411,47 +411,50 @@ async def generate_ticker_thesis(
         f"LIFECYCLE HISTORY:\n{lifecycle_context}" if lifecycle_context else ""
     ]))
 
-    if len(all_chunks) >= 3:
-        thesis = await mapreduce_synthesize(ticker, all_chunks, quant_data)
-    else:
-        thesis = await generate_thesis_direct(
-            ticker, quant_data,
-            enrich.get("news_context",  "No news."),
-            enrich.get("sec_context",   "No filings."),
-            adaptive_context
-        )
+    # ── Async thesis generation (await required — chains use ainvoke) ──────────
+    thesis = None
+    try:
+        if len(all_chunks) >= 3:
+            thesis = await mapreduce_synthesize(ticker, all_chunks, quant_data)
+        else:
+            thesis = await generate_thesis_direct(
+                ticker, quant_data,
+                enrich.get("news_context",  "No news."),
+                enrich.get("sec_context",   "No filings."),
+                adaptive_context
+            )
+    except Exception as e:
+        logger.error(f"❌ Thesis generation failed for {ticker}: {e}")
 
+    # ── Post-thesis actions ────────────────────────────────────────────────────
     if thesis:
-        save_thesis_to_history(ticker, thesis.model_dump(), phase="BULLISH")
+        # Safe conversion: Pydantic model → dict
+        thesis_dict = thesis.model_dump() if hasattr(thesis, "model_dump") else dict(thesis)
 
-        # Layer 1: record structured prediction for outcome tracking
-        _record_pred(
-            ticker       = ticker,
-            run_id       = run_id,
-            thesis       = thesis.model_dump(),
-            entry_price  = candidate["price"],
-            short_float  = candidate["short_float"],
-            dtc          = candidate["days_to_cover"],
-            volume_ratio = candidate["volume_ratio"],
-            si_trend     = candidate["si_trend"],
-        )
+        save_thesis_to_history(ticker, thesis_dict, phase="BULLISH")
 
-        # Phase 1: save prediction
-        save_prediction(
-            ticker=ticker,
-            run_id=run_id,
-            entry_price=candidate["price"],
-            target_price=candidate["price"] * (1 + thesis.confidence / 200),
-            direction="UP",
-            confidence=thesis.confidence,
-            time_horizon=thesis.time_horizon,
-            catalyst_types=thesis.catalyst_types,
-            short_float=candidate["short_float"],
-            days_to_cover=candidate["days_to_cover"],
-            volume_ratio=candidate["volume_ratio"],
-            si_trend=candidate["si_trend"],
-            thesis_summary=thesis.setup[:300] if thesis.setup else ""
-        )
+        # ── Layer 1: Record prediction for outcome tracking ────────────────────
+        # Uses prediction_tracker (the authoritative Layer 1 module).
+        # Note: learning_engine.save_prediction() is intentionally NOT called
+        # here — _record_pred is the single source of truth for predictions.
+        try:
+            current_price = candidate.get("price", 0)
+            pred_id = _record_pred(
+                ticker       = ticker,
+                run_id       = run_id,
+                thesis       = thesis_dict,
+                entry_price  = current_price,
+                short_float  = candidate.get("short_float"),
+                dtc          = candidate.get("days_to_cover"),
+                volume_ratio = candidate.get("volume_ratio"),
+                si_trend     = candidate.get("si_trend"),
+            )
+            if pred_id:
+                logger.info(f"✅ Thesis generated and prediction #{pred_id} recorded for {ticker}")
+            else:
+                logger.debug(f"[{ticker}] Prediction not recorded (duplicate or error)")
+        except Exception as e:
+            logger.error(f"❌ record_prediction failed for {ticker}: {e}")
 
     return {
         ticker: {
