@@ -33,6 +33,14 @@ os.makedirs("logs", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
 logger = logging.getLogger("tranksp")
+
+
+def get_consensus_badge(level: int) -> str:
+    """Return visual consensus indicator for frontend."""
+    if level == 4:   return "🔥🔥🔥🔥 4-LLM"
+    elif level == 3: return "⭐⭐⭐ 3-LLM"
+    elif level == 2: return "💎💎 2-LLM"
+    else:            return "⚪ 1-LLM"
 logger.setLevel(logging.DEBUG)
 
 # Rotating file handler
@@ -227,37 +235,77 @@ def get_universe():
     return rows
 
 
+@app.get("/api/universe/multi_llm")
+def get_multi_llm_universe_endpoint():
+    """Return ranked universe with consensus badges for Intake tab."""
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute("""
+            SELECT ticker, llm_consensus, source_llm, short_float_est,
+                   days_to_cover_est, catalyst, catalyst_type, confidence, added_at
+            FROM squeeze_universe
+            WHERE active=1
+            ORDER BY llm_consensus DESC, confidence DESC, added_at DESC
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+    except Exception as e:
+        # Columns may not exist yet — fall back to basic query
+        logger.warning(f"[Universe] multi_llm query failed ({e}), falling back to basic")
+        try:
+            conn = get_db()
+            c = conn.cursor()
+            c.execute("SELECT ticker, source, added_at FROM squeeze_universe WHERE active=1")
+            rows = [{"ticker": r["ticker"], "source": r["source"],
+                     "llm_consensus": 1, "badge": "⚪ 1-LLM",
+                     "added_at": r["added_at"]} for r in c.fetchall()]
+            conn.close()
+        except Exception as e2:
+            logger.error(f"[Universe] fallback query also failed: {e2}")
+            return {"tickers": [], "summary": {"total": 0, "4_llm": 0, "3_llm": 0, "2_llm": 0, "1_llm": 0}}
+
+    for row in rows:
+        row["badge"] = get_consensus_badge(row.get("llm_consensus") or 1)
+
+    return {
+        "tickers": rows,
+        "summary": {
+            "total": len(rows),
+            "4_llm": sum(1 for r in rows if (r.get("llm_consensus") or 0) == 4),
+            "3_llm": sum(1 for r in rows if (r.get("llm_consensus") or 0) == 3),
+            "2_llm": sum(1 for r in rows if (r.get("llm_consensus") or 0) == 2),
+            "1_llm": sum(1 for r in rows if (r.get("llm_consensus") or 0) == 1),
+        }
+    }
+
+
 @app.post("/api/universe/build")
 async def build_universe():
-    """Trigger live universe build from all internet sources."""
-    from agents.squeeze.universe_builder import build_universe as _build
-    
-    conn = get_db()
-    c = conn.cursor()
-    c.execute("SELECT ticker FROM squeeze_universe WHERE active=1")
-    existing = [r[0] for r in c.fetchall()]
-    conn.close()
-    
-    candidates = await _build(existing_tickers=existing)
-    
-    conn = get_db()
-    c = conn.cursor()
-    added = 0
-    for cand in candidates:
-        try:
-            c.execute("""
-                INSERT OR IGNORE INTO squeeze_universe (ticker, source)
-                VALUES (?, ?)
-            """, (cand["ticker"], cand.get("source", "web")))
-            if c.rowcount > 0:
-                added += 1
-        except Exception:
-            pass
-    conn.commit()
-    conn.close()
-    
-    logger.info(f"[Universe] Added {added} new tickers. Total candidates: {len(candidates)}")
-    return {"added": added, "total_found": len(candidates), "candidates": candidates}
+    """Trigger Multi-LLM universe build — Claude + Grok + OpenAI + Gemini in parallel."""
+    from agents.squeeze.multi_llm_client import build_multi_llm_universe
+
+    result = await build_multi_llm_universe(count_per_llm=25)
+
+    if result.get("status") == "failed":
+        raise HTTPException(status_code=500, detail="All LLM providers failed")
+
+    ranked   = result.get("ranked_tickers", [])
+    consensus = result.get("consensus", {})
+    logger.info(
+        f"[Universe] Multi-LLM build complete — "
+        f"{result.get('total_unique_tickers',0)} unique | "
+        f"4-LLM: {consensus.get('4_llm',0)} | "
+        f"3-LLM: {consensus.get('3_llm',0)}"
+    )
+    return {
+        "added":       result.get("total_unique_tickers", 0),
+        "total_found": result.get("total_unique_tickers", 0),
+        "consensus":   consensus,
+        "message":     result.get("message", ""),
+        "top_4_llm":  result.get("top_4_llm", []),
+        "top_3_llm":  result.get("top_3_llm", []),
+    }
 
 
 @app.post("/api/universe/add")

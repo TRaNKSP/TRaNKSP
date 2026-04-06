@@ -33,12 +33,19 @@ MIGRATIONS = [
     # ── Universe (live candidates pulled from internet) ────────────────────────
     """
     CREATE TABLE IF NOT EXISTS squeeze_universe (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        ticker        TEXT NOT NULL UNIQUE,
-        source        TEXT,
-        added_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_checked  TIMESTAMP,
-        active        INTEGER DEFAULT 1
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticker           TEXT NOT NULL UNIQUE,
+        source           TEXT,
+        source_llm       TEXT,
+        llm_consensus    INTEGER DEFAULT 1,
+        short_float_est  REAL,
+        days_to_cover_est REAL,
+        catalyst         TEXT,
+        catalyst_type    TEXT,
+        confidence       REAL,
+        added_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_checked     TIMESTAMP,
+        active           INTEGER DEFAULT 1
     )
     """,
 
@@ -275,6 +282,14 @@ MIGRATIONS = [
 ]
 
 
+def _add_col(cursor, table: str, column: str, col_def: str):
+    """Safely add a column — silently skips if already exists."""
+    try:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+    except Exception:
+        pass  # Column already exists
+
+
 def run_migrations():
     os.makedirs("data", exist_ok=True)
     os.makedirs("logs", exist_ok=True)
@@ -294,6 +309,35 @@ def run_migrations():
         except sqlite3.Error as e:
             print(f"[migrate_db] Step {i+1:02d} WARNING: {e}")
 
+    # ── Safe column additions for existing live databases ─────────────────────
+    # These ALTER TABLE statements add columns that may not exist in older DBs.
+    # Each is a no-op if the column already exists.
+
+    # squeeze_universe — multi-LLM consensus columns
+    for col, defn in [
+        ("source_llm",        "TEXT"),
+        ("llm_consensus",     "INTEGER DEFAULT 1"),
+        ("short_float_est",   "REAL"),
+        ("days_to_cover_est", "REAL"),
+        ("catalyst",          "TEXT"),
+        ("catalyst_type",     "TEXT"),
+        ("confidence",        "REAL"),
+    ]:
+        _add_col(cursor, "squeeze_universe", col, defn)
+
+    # squeeze_predictions — Layer 1 columns
+    for col, defn in [
+        ("thesis_id",           "INTEGER"),
+        ("predicted_direction",  "TEXT DEFAULT 'UP'"),
+        ("confidence_score",     "REAL"),
+        ("si_at_prediction",     "REAL"),
+        ("outcome_result",       "TEXT"),
+        ("actual_drawdown",      "REAL"),
+        ("si_at_outcome",        "REAL"),
+    ]:
+        _add_col(cursor, "squeeze_predictions", col, defn)
+
+    conn.commit()
     conn.close()
     print("[migrate_db] Migration complete.")
 

@@ -24,6 +24,18 @@ from typing import List, Dict, Any, Set
 
 logger = logging.getLogger("tranksp.multi_llm")
 
+def get_consensus_badge(level: int) -> str:
+    """Return visual consensus indicator for frontend display."""
+    if level == 4:
+        return "🔥🔥🔥🔥 4-LLM"
+    elif level == 3:
+        return "⭐⭐⭐ 3-LLM"
+    elif level == 2:
+        return "💎💎 2-LLM"
+    else:
+        return "⚪ 1-LLM"
+
+
 # ── Prompt ────────────────────────────────────────────────────────────────────
 
 UNIVERSE_PROMPT = """You are an expert short squeeze analyst.
@@ -103,7 +115,7 @@ async def _fetch_claude(count: int, today: str) -> List[Dict]:
         prompt = UNIVERSE_PROMPT.format(count=count, today=today)
         msg = await asyncio.to_thread(
             client.messages.create,
-            model="claude-3-5-sonnet-20241022",   # sonnet for universe quality
+            model="claude-haiku-4-5-20251001",   # haiku: fast + cheap for universe building
             max_tokens=3000,
             temperature=0.7,
             messages=[{"role": "user", "content": prompt}]
@@ -128,7 +140,7 @@ async def _fetch_grok(count: int, today: str) -> List[Dict]:
         client = AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
         prompt = UNIVERSE_PROMPT.format(count=count, today=today)
         resp = await client.chat.completions.create(
-            model="grok-2-1212",
+            model="grok-3",              # grok-3 is current stable (grok-2-1212 deprecated)
             messages=[{"role": "user", "content": prompt}],
             max_tokens=3000,
             temperature=0.7
@@ -167,7 +179,7 @@ async def _fetch_openai(count: int, today: str) -> List[Dict]:
 
 
 async def _fetch_gemini(count: int, today: str) -> List[Dict]:
-    # Matches uploaded file: GOOGLE_API_KEY, model gemini-2.0-flash
+    # GOOGLE_API_KEY — model updated to gemini-2.5-flash (2.0-flash deprecated Mar 2026)
     api_key = _get_key("GOOGLE_API_KEY", "GEMINI_API_KEY")
     if not api_key:
         logger.debug("GEMINI: no GOOGLE_API_KEY — skipping")
@@ -175,7 +187,7 @@ async def _fetch_gemini(count: int, today: str) -> List[Dict]:
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model  = genai.GenerativeModel("gemini-2.0-flash")
+        model  = genai.GenerativeModel("gemini-2.5-flash")
         prompt = UNIVERSE_PROMPT.format(count=count, today=today)
         resp   = await asyncio.to_thread(model.generate_content, prompt)
         items  = _clean_json(resp.text or "")
@@ -242,8 +254,9 @@ def _build_consensus(all_results: List[List[Dict]]) -> Dict[str, Any]:
 
 async def build_multi_llm_universe(count_per_llm: int = 25) -> Dict[str, Any]:
     """
-    Full universe build — matches uploaded multi_llm_universe.py exactly.
-    Queries all 4 providers in parallel and returns consensus dict + saves to DB.
+    Full universe build — queries all 4 providers in parallel,
+    builds consensus ranking, saves to DB with consensus level,
+    and returns structured result with badge indicators.
     """
     today = date.today().strftime("%B %d, %Y")
     logger.info(f"🚀 Starting Multi-LLM Universe Build ({count_per_llm} per model)...")
@@ -262,8 +275,46 @@ async def build_multi_llm_universe(count_per_llm: int = 25) -> Dict[str, Any]:
 
     merged = _build_consensus(valid)
 
-    # Summary result matching uploaded file format
+    # === ENHANCED DB SAVE WITH CONSENSUS LEVEL ===
+    import sqlite3, os as _os
+    DB_PATH = _os.path.join("data", "tranksp.db")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    added = 0
+
+    for cand in merged["ranked"]:
+        level = cand.get("llm_consensus", 1)
+        c.execute("""
+            INSERT OR REPLACE INTO squeeze_universe
+            (ticker, source, source_llm, llm_consensus,
+             short_float_est, days_to_cover_est,
+             catalyst, catalyst_type, confidence, added_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """, (
+            cand["ticker"],
+            f"multi_llm_{level}",
+            ",".join(cand.get("sources", [])),
+            level,
+            cand.get("est_short_float"),
+            cand.get("est_dtc"),
+            cand.get("catalyst"),
+            cand.get("catalyst_type"),
+            cand.get("confidence"),
+        ))
+        if c.rowcount > 0:
+            added += 1
+
+    conn.commit()
+    conn.close()
+    logger.info(f"[MultiLLM] Saved {added} tickers to squeeze_universe")
+
+    # Add badge to each ranked ticker
+    for cand in merged["ranked"]:
+        cand["badge"] = get_consensus_badge(cand.get("llm_consensus", 1))
+
     result = {
+        "status":               "success",
         "total_unique_tickers": merged["total_unique"],
         "consensus": {
             "4_llm": len(merged["consensus"]["4_llm"]),
@@ -271,22 +322,27 @@ async def build_multi_llm_universe(count_per_llm: int = 25) -> Dict[str, Any]:
             "2_llm": len(merged["consensus"]["2_llm"]),
             "1_llm": len(merged["consensus"]["1_llm"]),
         },
-        "top_4_llm": [c["ticker"] for c in merged["consensus"]["4_llm"][:10]],
-        "top_3_llm": [c["ticker"] for c in merged["consensus"]["3_llm"][:15]],
-        "ranked":    merged["ranked"],
-        "status":    "success",
+        "top_4_llm":      [c["ticker"] for c in merged["consensus"]["4_llm"][:10]],
+        "top_3_llm":      [c["ticker"] for c in merged["consensus"]["3_llm"][:15]],
+        "ranked_tickers": merged["ranked"],
+        "message":        f"Built universe with {merged['total_unique']} unique tickers",
     }
 
-    logger.info(f"🎉 Multi-LLM Complete! Total: {result['total_unique_tickers']} | "
-                f"4-LLM: {result['consensus']['4_llm']} | "
-                f"3-LLM: {result['consensus']['3_llm']}")
+    logger.info(
+        f"🎉 Multi-LLM Universe Build Finished Successfully! "
+        f"Total: {result['total_unique_tickers']} | "
+        f"4-LLM: {result['consensus']['4_llm']} | "
+        f"3-LLM: {result['consensus']['3_llm']} | "
+        f"2-LLM: {result['consensus']['2_llm']} | "
+        f"1-LLM: {result['consensus']['1_llm']}"
+    )
     return result
 
 
 async def get_multi_llm_universe(count: int = 30) -> List[Dict]:
     """Simplified entry point — returns flat ranked list for screen pipeline."""
     result = await build_multi_llm_universe(count_per_llm=min(count, 25))
-    return result.get("ranked", [])[:count]
+    return result.get("ranked_tickers", [])[:count]
 
 
 def get_tickers_only(candidates: List[Dict]) -> List[str]:

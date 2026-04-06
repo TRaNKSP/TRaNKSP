@@ -110,19 +110,23 @@ class _YahooSession:
             return
         logger.info("[YahooQuote] Warming session and acquiring crumb...")
         try:
-            # Step 1: homepage cookies
-            self._session.get(YAHOO_HOME, headers={**self._base_headers(), "Accept": "text/html"}, timeout=10)
+            # Step 1: Homepage cookies
+            self._session.get(
+                YAHOO_HOME,
+                headers={**self._base_headers(), "Accept": "text/html"},
+                timeout=10
+            )
             time.sleep(random.uniform(1.0, 2.0))
 
             # Step 2: SPY quote page for full cookie set
-            self._session.get(
+            spy_resp = self._session.get(
                 "https://finance.yahoo.com/quote/SPY/",
                 headers={**self._base_headers(), "Accept": "text/html"},
                 timeout=10
             )
             time.sleep(random.uniform(0.8, 1.5))
 
-            # Step 3: Acquire crumb (try q2 first — more reliable)
+            # Strategy A: Dedicated crumb endpoints (q2 then q1)
             for crumb_url in [CRUMB_URL2, CRUMB_URL1]:
                 try:
                     r = self._session.get(
@@ -132,13 +136,54 @@ class _YahooSession:
                     )
                     if r.status_code == 200 and r.text and len(r.text.strip()) < 50:
                         self._crumb = r.text.strip()
-                        logger.info(f"[YahooQuote] Crumb acquired ({'q2' if 'query2' in crumb_url else 'q1'})")
+                        logger.info(f"[YahooQuote] Crumb acquired via endpoint "
+                                    f"({'q2' if 'query2' in crumb_url else 'q1'})")
                         break
                 except Exception:
                     pass
 
+            # Strategy B: Extract crumb from SPY page HTML (if endpoint failed)
+            if not self._crumb and spy_resp and spy_resp.status_code == 200:
+                import re as _re
+                html = spy_resp.text
+                # Yahoo embeds crumb in page as "CrumbStore":{"crumb":"XXXXXX"}
+                for pattern in [
+                    r'"CrumbStore":\{"crumb":"([^"]{8,20})"',
+                    r'"crumb":"([^"]{8,20})"',
+                    r'crumb=([A-Za-z0-9%._-]{8,20})',
+                ]:
+                    m = _re.search(pattern, html)
+                    if m:
+                        crumb_raw = m.group(1).replace(r'\u002F', '/')
+                        if crumb_raw and len(crumb_raw) >= 8:
+                            self._crumb = crumb_raw
+                            logger.info(f"[YahooQuote] Crumb extracted from page HTML")
+                            break
+
+            # Strategy C: Try the v2 consent / finance.yahoo.com API directly
             if not self._crumb:
-                logger.warning("[YahooQuote] No crumb acquired — SI fields may be null")
+                try:
+                    r3 = self._session.get(
+                        "https://finance.yahoo.com/quote/SPY/?p=SPY",
+                        headers={**self._base_headers(),
+                                 "Accept": "text/html,application/xhtml+xml"},
+                        timeout=10
+                    )
+                    import re as _re
+                    for pattern in [r'"crumb":"([^"]{8,20})"', r'crumb=([A-Za-z0-9._-]{8,20})']:
+                        m = _re.search(pattern, r3.text)
+                        if m:
+                            self._crumb = m.group(1).replace(r'\u002F', '/')
+                            logger.info("[YahooQuote] Crumb extracted via Strategy C")
+                            break
+                except Exception:
+                    pass
+
+            if self._crumb:
+                logger.info(f"[YahooQuote] Session ready — crumb: {self._crumb[:6]}***")
+            else:
+                logger.warning("[YahooQuote] No crumb acquired — will try crumb-free requests "
+                               "(price data OK, SI fields may be limited)")
 
             self._warmed = True
 
@@ -157,61 +202,64 @@ class _YahooSession:
         self.warm_up()
         self._wait()
 
-        ticker = ticker.upper().strip()
+        ticker  = ticker.upper().strip()
         modules = "defaultKeyStatistics,summaryDetail,price"
-        params  = {"modules": modules, "formatted": "false"}
-        if self._crumb:
-            params["crumb"] = self._crumb
 
         headers = {**self._base_headers(), "Accept": "application/json, */*"}
 
+        # Try with crumb first, then without (Yahoo sometimes works crumb-free)
+        param_sets = []
+        if self._crumb:
+            param_sets.append({"modules": modules, "formatted": "false", "crumb": self._crumb})
+        param_sets.append({"modules": modules, "formatted": "false"})  # crumb-free fallback
+
         for base_url in [SUMMARY_API, SUMMARY_API2]:
             url = base_url.format(ticker=ticker)
-            try:
-                resp = self._session.get(url, params=params, headers=headers, timeout=12)
-
-                if resp.status_code == 429:
-                    logger.warning(f"[YahooQuote] 429 on {ticker} — waiting 30s")
-                    time.sleep(30)
-                    self._last_call = time.time()
-                    # Try once more
+            for params in param_sets:
+                try:
                     resp = self._session.get(url, params=params, headers=headers, timeout=12)
+
                     if resp.status_code == 429:
-                        logger.warning(f"[YahooQuote] {ticker}: 429 again — skipping")
-                        return None
+                        logger.warning(f"[YahooQuote] 429 on {ticker} — waiting 30s")
+                        time.sleep(30)
+                        self._last_call = time.time()
+                        resp = self._session.get(url, params=params, headers=headers, timeout=12)
+                        if resp.status_code == 429:
+                            logger.warning(f"[YahooQuote] {ticker}: 429 again — skipping")
+                            return None
 
-                if resp.status_code == 401:
-                    # Crumb expired — force re-warm next call
-                    logger.warning(f"[YahooQuote] 401 on {ticker} — crumb expired, will re-warm")
-                    self._warmed = False
-                    self._crumb  = None
-                    return None
+                    if resp.status_code == 401:
+                        # Crumb expired — force re-warm on next call
+                        logger.warning(f"[YahooQuote] 401 on {ticker} — crumb expired, will re-warm")
+                        self._warmed = False
+                        self._crumb  = None
+                        break  # break param_sets loop, try next base_url
 
-                if resp.status_code != 200:
-                    logger.debug(f"[YahooQuote] HTTP {resp.status_code} for {ticker}")
-                    continue
+                    if resp.status_code != 200:
+                        logger.debug(f"[YahooQuote] HTTP {resp.status_code} for {ticker}")
+                        continue
 
-                data   = resp.json()
-                result = (data.get("quoteSummary", {}).get("result") or [{}])[0]
-                stats  = result.get("defaultKeyStatistics", {})
-                detail = result.get("summaryDetail", {})
-                price  = result.get("price", {})
+                    data   = resp.json()
+                    result = (data.get("quoteSummary", {}).get("result") or [{}])[0]
+                    stats  = result.get("defaultKeyStatistics", {})
+                    detail = result.get("summaryDetail", {})
+                    price  = result.get("price", {})
 
-                if not (stats or detail):
-                    continue
+                    if not (stats or detail):
+                        continue
 
-                parsed = _build_result(stats, detail, price)
-                if parsed["price"] > 0 or parsed["short_float"] > 0:
-                    logger.info(
-                        f"[YahooQuote] {ticker}: "
-                        f"SI={parsed['short_float']:.1f}% "
-                        f"DTC={parsed['days_to_cover']:.1f} "
-                        f"${parsed['price']:.2f} {parsed['si_trend']}"
-                    )
-                    return parsed
+                    parsed = _build_result(stats, detail, price)
+                    if parsed["price"] > 0 or parsed["short_float"] > 0:
+                        logger.info(
+                            f"[YahooQuote] {ticker}: "
+                            f"SI={parsed['short_float']:.1f}% "
+                            f"DTC={parsed['days_to_cover']:.1f} "
+                            f"${parsed['price']:.2f} {parsed['si_trend']}"
+                        )
+                        return parsed
 
-            except Exception as e:
-                logger.debug(f"[YahooQuote] Error for {ticker}: {e}")
+                except Exception as e:
+                    logger.debug(f"[YahooQuote] Error for {ticker}: {e}")
 
         logger.debug(f"[YahooQuote] No data for {ticker}")
         return None
