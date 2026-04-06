@@ -1199,11 +1199,19 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   <div class="section-header">
     <div>
       <div class="section-title">Prediction Tracker &amp; Learning Engine</div>
-      <div class="section-sub">Phase 1-4: Outcome tracking, episodic memory, calibration, meta-learning</div>
+      <div class="section-sub">Layer 1: Outcome tracking → calibration → meta-learning</div>
     </div>
     <div class="spacer"></div>
     <button class="btn btn-ghost btn-sm" onclick="triggerEvaluation()">▶ Evaluate Now</button>
     <button class="btn btn-ghost btn-sm" onclick="loadPredictionsTab()">↻ Refresh</button>
+  </div>
+
+  <!-- Layer 1 stats banner -->
+  <div id="predStatsBanner" style="display:none;margin-bottom:16px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px">
+      <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Layer 1 — Outcome Tracking</div>
+      <div id="predStatsGrid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:16px"></div>
+    </div>
   </div>
 
   <!-- Calibration stats banner -->
@@ -2838,6 +2846,29 @@ function filterPredictions(btn, status) {
 }
 
 async function loadPredictionsTab() {
+  // Load Layer 1 stats
+  try {
+    const r2 = await fetch('/api/predictions/stats');
+    const s = await r2.json();
+    if (s && s.total > 0) {
+      document.getElementById('predStatsBanner').style.display = 'block';
+      const g = document.getElementById('predStatsGrid');
+      const accuracy = s.accuracy_pct || 0;
+      const pnl = s.avg_pnl_pct || 0;
+      g.innerHTML = `
+        <div><div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">TOTAL</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700">${s.total}</div></div>
+        <div><div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">OPEN</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent4)">${s.open||0}</div></div>
+        <div><div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">ACCURACY</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:${accuracy>=60?'var(--accent3)':'var(--accent2)'}">${accuracy||0}%</div></div>
+        <div><div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">AVG P&L</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:${pnl>=0?'var(--accent3)':'var(--accent2)'}">${pnl>=0?'+':''}${pnl||0}%</div></div>
+        <div><div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-bottom:4px">HITS</div>
+          <div style="font-family:var(--font-mono);font-size:22px;font-weight:700;color:var(--accent3)">${s.hits||0}</div></div>`;
+    }
+  } catch(e) { console.warn('predStats:', e); }
+
   // Load calibration stats
   try {
     const r = await fetch('/api/predictions/calibration');

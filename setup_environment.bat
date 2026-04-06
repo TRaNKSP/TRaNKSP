@@ -34,10 +34,27 @@ if not exist .env (
     echo.
     echo Creating .env template...
     (
+        echo # ── REQUIRED ──────────────────────────────────────────────────────────
         echo ANTHROPIC_API_KEY=your_anthropic_key_here
         echo TAVILY_API_KEY=your_tavily_key_here
         echo MASSIVE_API_KEY=your_massive_key_here
-        echo FINNHUB_API_KEY=your_finnhub_key_here
+        echo.
+        echo # ── OPTIONAL: Additional LLM providers for multi-model consensus ──────
+        echo # Each adds a parallel voice to squeeze candidate selection.
+        echo # Leave blank to skip that provider — Claude always runs.
+        echo.
+        echo # OpenAI GPT-4o-mini  →  https://platform.openai.com/api-keys
+        echo OPENAI_API_KEY=
+        echo.
+        echo # xAI Grok-2          →  https://console.x.ai/
+        echo GROK_API_KEY=
+        echo.
+        echo # Google Gemini       →  https://aistudio.google.com/app/apikey
+        echo GEMINI_API_KEY=
+        echo.
+        echo # ── OPTIONAL: Short interest fallback ─────────────────────────────────
+        echo # Finnhub free tier (60 req/min)  →  https://finnhub.io/dashboard
+        echo FINNHUB_API_KEY=
     ) > .env
     echo IMPORTANT: Edit .env and add your API keys before starting!
 )

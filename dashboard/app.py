@@ -93,6 +93,14 @@ def setup_scheduler():
         id="daily_outcome_check",
         replace_existing=True
     )
+
+    from agents.squeeze.prediction_tracker import run_daily_outcome_check as _pt_daily
+    scheduler.add_job(
+        _pt_daily,
+        CronTrigger(hour=8, minute=50),
+        id="daily_prediction_outcomes",
+        replace_existing=True
+    )
     scheduler.start()
     logger.info("[Scheduler] APScheduler started. Daily lifecycle check at 8:30 AM CT.")
 
@@ -1046,6 +1054,13 @@ async def refresh_ticker_si(ticker: str):
 # ─────────────────────────────────────────────────────────────────────────────
 # HEALTH
 # ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/predictions/stats")
+def get_prediction_stats_endpoint():
+    """Summary stats for the Predictions tab header."""
+    from agents.squeeze.prediction_tracker import get_prediction_stats
+    return get_prediction_stats()
+
 
 @app.get("/api/health")
 def health():

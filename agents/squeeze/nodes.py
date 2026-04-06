@@ -31,6 +31,7 @@ from .learning_engine import (
     format_calibration_for_prompt, query_episode_memory, save_prediction
 )
 from .run_tracker import save_run_detail
+from .prediction_tracker import record_prediction as _record_pred
 from .yahoo_screener import scrape_most_shorted
 
 logger = logging.getLogger("tranksp.nodes")
@@ -422,6 +423,18 @@ async def generate_ticker_thesis(
 
     if thesis:
         save_thesis_to_history(ticker, thesis.model_dump(), phase="BULLISH")
+
+        # Layer 1: record structured prediction for outcome tracking
+        _record_pred(
+            ticker       = ticker,
+            run_id       = run_id,
+            thesis       = thesis.model_dump(),
+            entry_price  = candidate["price"],
+            short_float  = candidate["short_float"],
+            dtc          = candidate["days_to_cover"],
+            volume_ratio = candidate["volume_ratio"],
+            si_trend     = candidate["si_trend"],
+        )
 
         # Phase 1: save prediction
         save_prediction(

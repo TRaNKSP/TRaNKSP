@@ -19,13 +19,23 @@ langgraph==0.2.60
 langchain-chroma==0.1.4
 chromadb==0.5.23
 
-# ── AI / Search APIs ───────────────────────────────────────────────────────────
+# ── LLM Providers ─────────────────────────────────────────────────────────────
+# Anthropic Claude (required)
 anthropic>=0.41.0,<1
+
+# OpenAI GPT-4o-mini (optional — set OPENAI_API_KEY in .env)
+openai>=1.30.0,<2
+
+# Google Gemini (optional — set GEMINI_API_KEY in .env)
+google-generativeai>=0.7.0,<1
+
+# Note: xAI Grok uses the openai package with a custom base_url (no extra install needed)
+
+# ── Search APIs ────────────────────────────────────────────────────────────────
 tavily-python==0.5.0
 
-# ── Market data (Massive.com / Polygon.io — official API, no scraping) ─────────
+# ── Market data (Massive.com / Polygon.io — official API) ─────────────────────
 polygon-api-client>=1.12.0
-finnhub-python>=2.4.0
 
 # ── Data / utilities ───────────────────────────────────────────────────────────
 pandas>=1.5.0,<3

@@ -1,6 +1,6 @@
 @echo off
 echo ============================================================
-echo  TRaNKSP — TRaNK Scenario Planner
+echo  TRaNKSP - TRaNK Scenario Planner
 echo ============================================================
 
 if not exist venv (
@@ -17,11 +17,15 @@ if not exist .env (
     exit /b 1
 )
 
+echo Checking API keys...
+python check_keys.py
+echo.
+
 echo Starting TRaNKSP server...
 echo Dashboard: http://localhost:8765
 echo.
 
-REM Launch browser after 3 second delay (gives server time to start)
+REM Launch browser after 3 second delay
 start "" cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:8765"
 
 uvicorn dashboard.app:app --host 0.0.0.0 --port 8765 --reload
