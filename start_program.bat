@@ -25,7 +25,7 @@ echo Starting TRaNKSP server...
 echo Dashboard: http://localhost:8765
 echo.
 
-REM Launch browser after 3 second delay
-start "" cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:8765"
+REM Launch browser after 8 second delay (gives server time to fully start + warm Yahoo session)
+start "" cmd /c "timeout /t 8 /nobreak >nul && start http://localhost:8765"
 
 uvicorn dashboard.app:app --host 0.0.0.0 --port 8765 --reload

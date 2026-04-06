@@ -1110,15 +1110,171 @@ def get_prediction_stats_endpoint():
     return get_prediction_stats()
 
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM CONSENSUS PAGE
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/llm_consensus")
+def get_llm_consensus(run_date: str = None):
+    """
+    Return 4-LLM consensus table for the Consensus tab.
+    One row per (date × ticker) showing which LLMs picked it.
+    Color-coded by llm_consensus count.
+    """
+    conn = get_db()
+    c    = conn.cursor()
+
+    if run_date:
+        c.execute("""
+            SELECT run_date, llm_name, ticker,
+                   est_short_float, est_dtc, catalyst, catalyst_type, confidence
+            FROM llm_daily_suggestions
+            WHERE run_date = ?
+            ORDER BY ticker
+        """, (run_date,))
+    else:
+        # Default: today's most recent date that has data
+        c.execute("""
+            SELECT run_date, llm_name, ticker,
+                   est_short_float, est_dtc, catalyst, catalyst_type, confidence
+            FROM llm_daily_suggestions
+            WHERE run_date = (SELECT MAX(run_date) FROM llm_daily_suggestions)
+            ORDER BY ticker
+        """)
+
+    rows = [dict(r) for r in c.fetchall()]
+
+    # All available dates for the dropdown
+    c.execute("SELECT DISTINCT run_date FROM llm_daily_suggestions ORDER BY run_date DESC LIMIT 30")
+    dates = [r[0] for r in c.fetchall()]
+    conn.close()
+
+    if not rows:
+        return {"data": [], "dates": dates}
+
+    # Pivot: one row per ticker showing ✓/blank per LLM
+    from collections import defaultdict
+    pivot = defaultdict(lambda: {
+        "ticker": "", "run_date": "",
+        "claude": "", "grok": "", "openai": "", "gemini": "",
+        "llm_consensus": 0, "est_short_float": 0, "est_dtc": 0,
+        "catalyst": "", "catalyst_type": "", "confidence": 0,
+    })
+
+    for r in rows:
+        key    = f"{r['run_date']}_{r['ticker']}"
+        llm    = r["llm_name"].lower()
+        ticker = r["ticker"]
+        d      = pivot[key]
+        d["ticker"]   = ticker
+        d["run_date"] = r["run_date"]
+        # Mark which LLM picked this ticker
+        if   llm == "claude":  d["claude"]  = ticker
+        elif llm == "grok":    d["grok"]    = ticker
+        elif llm == "openai":  d["openai"]  = ticker
+        elif llm == "gemini":  d["gemini"]  = ticker
+        # Use highest-confidence values
+        if r.get("confidence", 0) > d["confidence"]:
+            d["est_short_float"] = r.get("est_short_float", 0) or 0
+            d["est_dtc"]         = r.get("est_dtc", 0) or 0
+            d["catalyst"]        = r.get("catalyst", "") or ""
+            d["catalyst_type"]   = r.get("catalyst_type", "") or ""
+            d["confidence"]      = r.get("confidence", 0) or 0
+
+    # Count consensus and check DB membership
+    conn2 = get_db()
+    c2    = conn2.cursor()
+
+    result = []
+    for key, row in pivot.items():
+        count = sum(1 for col in ["claude","grok","openai","gemini"] if row[col])
+        row["llm_consensus"] = count
+        row["badge"]         = get_consensus_badge(count)
+
+        # Is ticker already in squeeze_results (active card)?
+        c2.execute("SELECT COUNT(*) FROM squeeze_results WHERE ticker=?", (row["ticker"],))
+        in_squeeze = c2.fetchone()[0] > 0
+        row["in_squeeze"] = in_squeeze
+        row["action"]     = "Already in Short Squeeze" if in_squeeze else "Add to Short Squeeze"
+        result.append(row)
+
+    conn2.close()
+
+    # Sort: 4-LLM first, then 3, 2, 1, then alphabetical within group
+    result.sort(key=lambda x: (-x["llm_consensus"], x["ticker"]))
+
+    return {"data": result, "dates": dates}
+
+
+@app.post("/api/llm_consensus/move/{ticker}")
+async def move_ticker_to_squeeze(ticker: str):
+    """
+    Add ticker to universe and immediately re-evaluate it
+    (fetch SI data, score, and generate thesis) — same as Re-Eval card button.
+    """
+    ticker = ticker.upper().strip()
+
+    # Add to universe
+    conn = get_db()
+    c    = conn.cursor()
+    c.execute(
+        "INSERT OR IGNORE INTO squeeze_universe (ticker, source) VALUES (?, ?)",
+        (ticker, "consensus_page")
+    )
+    conn.commit()
+    conn.close()
+
+    # Re-evaluate: fetch live data + lifecycle eval
+    try:
+        from agents.squeeze.lifecycle_tracker import evaluate_ticker_lifecycle
+        conn = get_db()
+        c    = conn.cursor()
+        c.execute("SELECT * FROM squeeze_lifecycle WHERE ticker=? LIMIT 1", (ticker,))
+        row  = c.fetchone()
+        conn.close()
+
+        if row:
+            await evaluate_ticker_lifecycle(ticker, dict(row))
+        else:
+            # New ticker — seed it with Yahoo data
+            from agents.squeeze.yahoo_quote import get_quote_data
+            import asyncio as _asyncio
+            quote = await _asyncio.to_thread(get_quote_data, ticker)
+            if quote and quote.get("price", 0) > 0:
+                conn = get_db()
+                c    = conn.cursor()
+                c.execute("""
+                    INSERT OR IGNORE INTO squeeze_lifecycle
+                        (ticker, snapshot_date, status, entry_price, current_price, short_interest)
+                    VALUES (?,?,?,?,?,?)
+                """, (
+                    ticker, date.today().isoformat(), "ACTIVE",
+                    quote["price"], quote["price"], quote.get("short_float", 0)
+                ))
+                conn.commit()
+                conn.close()
+
+        logger.info(f"[Consensus] Moved {ticker} to Short Squeeze queue")
+        return {"status": "ok", "ticker": ticker, "message": f"{ticker} added to Short Squeeze"}
+
+    except Exception as e:
+        logger.error(f"[Consensus] Move failed for {ticker}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/health")
 def health():
     return {
         "status": "ok",
         "time": datetime.utcnow().isoformat(),
         "anthropic_key": bool(os.environ.get("ANTHROPIC_API_KEY")),
-        "tavily_key": bool(os.environ.get("TAVILY_API_KEY")),
-        "massive_key": bool(os.environ.get("MASSIVE_API_KEY")),
-        "finnhub_key": bool(os.environ.get("FINNHUB_API_KEY"))
+        "tavily_key":    bool(os.environ.get("TAVILY_API_KEY")),
+        "massive_key":   bool(os.environ.get("MASSIVE_API_KEY")),
+        "finnhub_key":   bool(os.environ.get("FINNHUB_API_KEY")),
+        "openai_key":    bool(os.environ.get("OPENAI_API_KEY")),
+        "grok_key":      bool(os.environ.get("XAI_API_KEY")),
+        "gemini_key":    bool(os.environ.get("GOOGLE_API_KEY")),
     }
 
 

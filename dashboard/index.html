@@ -682,6 +682,7 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   <div class="nav-tab" data-tab="logs">🖥 Logs</div>
   <div class="nav-tab" data-tab="settings">⚙ Settings</div>
   <div class="nav-tab" data-tab="billing">💳 Billing</div>
+  <div class="nav-tab" data-tab="consensus">🧠 LLM Consensus</div>
 </nav>
 
 <!-- MAIN -->
@@ -1447,31 +1448,79 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
       </div>
       <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_anthropic">Checking...</span></div>
       <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
-        <a href="https://console.anthropic.com/settings/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Billing Dashboard</a>
-        <a href="https://console.anthropic.com/settings/usage" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📊 Usage Monitor</a>
+        <a href="https://platform.claude.com/settings/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Billing Dashboard</a>
+        <a href="https://claude.ai/settings/usage" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📊 Usage Monitor</a>
         <a href="https://console.anthropic.com/settings/keys" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🔑 API Keys</a>
       </div>
       <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
-        Models used: claude-sonnet-4 (thesis/reduce), claude-haiku-4.5 (map/explain/lessons)
+        Models used: claude-sonnet-4-6 (thesis), claude-haiku-4-5 (universe/explain)
       </div>
     </div>
 
-    <!-- Claude.ai Consumer -->
+    <!-- OpenAI -->
     <div class="card card-accent-top">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <div style="font-size:24px">💬</div>
+        <div style="font-size:24px">🟢</div>
         <div>
-          <div style="font-weight:700;font-size:15px">Claude.ai Consumer</div>
-          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Your claude.ai subscription and chat usage</div>
+          <div style="font-weight:700;font-size:15px">OpenAI API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">GPT-4o-mini — optional 2nd LLM for universe consensus</div>
         </div>
+        <div id="dot_openai" class="health-dot" style="margin-left:auto" title="Checking..."></div>
       </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_openai">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Model</span><span class="stat-value mono">gpt-4o-mini</span></div>
       <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
-        <a href="https://claude.ai/settings/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Subscription Billing</a>
-        <a href="https://claude.ai/settings" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">⚙ Account Settings</a>
-        <a href="https://claude.ai" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🏠 Open Claude.ai</a>
+        <a href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Billing Dashboard</a>
+        <a href="https://platform.openai.com/usage" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📊 Usage Monitor</a>
+        <a href="https://platform.openai.com/api-keys" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🔑 API Keys</a>
       </div>
       <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
-        Separate from API billing — this is your chat.claude.ai plan cost
+        Used for: multi-LLM universe building (optional — set OPENAI_API_KEY in .env)
+      </div>
+    </div>
+
+    <!-- xAI Grok -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">⚡</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">xAI Grok API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Grok-3 — optional 3rd LLM for universe consensus</div>
+        </div>
+        <div id="dot_grok" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_grok">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Model</span><span class="stat-value mono">grok-3</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://console.x.ai/team/a8243662-1e7c-49c8-9e08-f4aa6401096c/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Billing Dashboard</a>
+        <a href="https://console.x.ai/" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📊 Console &amp; Usage</a>
+        <a href="https://console.x.ai/keys" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🔑 API Keys</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Used for: multi-LLM universe building (optional — set XAI_API_KEY in .env)
+      </div>
+    </div>
+
+    <!-- Google Gemini -->
+    <div class="card card-accent-top">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <div style="font-size:24px">🔵</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Google Gemini API</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Gemini 2.5 Flash — optional 4th LLM for universe consensus</div>
+        </div>
+        <div id="dot_gemini" class="health-dot" style="margin-left:auto" title="Checking..."></div>
+      </div>
+      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_gemini">Checking...</span></div>
+      <div class="stat-row"><span class="stat-label">Model</span><span class="stat-value mono">gemini-2.5-flash</span></div>
+      <div class="stat-row"><span class="stat-label">Free Tier</span><span class="stat-value mono" style="color:var(--accent3)">15 req/min — free ✓</span></div>
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
+        <a href="https://aistudio.google.com/app/spend?project=gen-lang-client-0938024885" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Spend &amp; Billing</a>
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🔑 API Keys</a>
+        <a href="https://ai.google.dev/pricing" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing</a>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
+        Used for: multi-LLM universe building (optional — set GOOGLE_API_KEY in .env)
       </div>
     </div>
 
@@ -1492,10 +1541,9 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
         <a href="https://massive.com/dashboard/billing" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">💳 Billing Dashboard</a>
         <a href="https://massive.com/dashboard/usage" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📊 Usage Monitor</a>
         <a href="https://massive.com/dashboard/keys" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">🔑 API Keys</a>
-        <a href="https://massive.com/pricing" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
       </div>
       <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
-        Endpoints used: /v2/snapshot (price), /v3/reference/short-interest, /v3/reference/tickers
+        Endpoints: /v2/snapshot (price), /v3/reference/short-interest, /v3/reference/tickers
       </div>
     </div>
 
@@ -1523,34 +1571,78 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
       </div>
     </div>
 
-    <!-- Finnhub -->
-    <div class="card card-accent-top">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-        <div style="font-size:24px">📊</div>
-        <div>
-          <div style="font-weight:700;font-size:15px">Finnhub API</div>
-          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3)">Short interest data — 60 req/min free tier</div>
-        </div>
-        <div id="dot_finnhub" class="health-dot" style="margin-left:auto" title="Checking..."></div>
-      </div>
-      <div class="stat-row"><span class="stat-label">API Key Status</span><span class="stat-value mono" id="key_finnhub">Checking...</span></div>
-      <div class="stat-row"><span class="stat-label">Free Rate Limit</span><span class="stat-value mono">60 req/min</span></div>
-      <div class="stat-row"><span class="stat-label">TRaNKSP Usage</span><span class="stat-value mono" style="color:var(--accent3)">~1.2s gap — safe ✓</span></div>
-      <div class="stat-row"><span class="stat-label">Data provided</span><span class="stat-value mono">Short float %, DTC, SI trend</span></div>
-      <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px">
-        <a href="https://finnhub.io/dashboard" target="_blank" class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">🔑 Get Free API Key</a>
-        <a href="https://finnhub.io/docs/api/stock-short-interest" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">📖 Short Interest Docs</a>
-        <a href="https://finnhub.io/pricing-stock-api-market-data" target="_blank" class="btn btn-ghost" style="text-align:center;text-decoration:none;display:block">💲 Pricing Plans</a>
-      </div>
-      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);color:var(--text3)">
-        Endpoint: /stock/short-interest, /stock/profile2, /calendar/earnings
-      </div>
-    </div>
-
   </div>
 </div>
 
 </div><!-- /main -->
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TAB: LLM CONSENSUS                             -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="tab-panel" id="tab-consensus">
+  <div class="section-header">
+    <div>
+      <div class="section-title">4-LLM Consensus View</div>
+      <div class="section-sub">Which tickers did each LLM recommend? Sorted by agreement strength.</div>
+    </div>
+    <div class="spacer"></div>
+    <select id="consensusDateFilter" onchange="loadConsensusTab()"
+      style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font-mono);font-size:12px">
+      <option value="">Latest run</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" onclick="loadConsensusTab()">↻ Refresh</button>
+  </div>
+
+  <!-- Consensus legend -->
+  <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-family:var(--font-mono)">
+      <div style="width:14px;height:14px;border-radius:3px;background:rgba(255,77,109,0.25);border:2px solid var(--accent2)"></div>
+      <span style="color:var(--accent2)">🔥🔥🔥🔥 4-LLM — Strongest consensus</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-family:var(--font-mono)">
+      <div style="width:14px;height:14px;border-radius:3px;background:rgba(181,255,77,0.15);border:2px solid var(--accent3)"></div>
+      <span style="color:var(--accent3)">⭐⭐⭐ 3-LLM — Strong</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-family:var(--font-mono)">
+      <div style="width:14px;height:14px;border-radius:3px;background:rgba(0,229,255,0.12);border:2px solid var(--accent)"></div>
+      <span style="color:var(--accent)">💎💎 2-LLM — Moderate</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-family:var(--font-mono)">
+      <div style="width:14px;height:14px;border-radius:3px;background:var(--surface2);border:2px solid var(--border2)"></div>
+      <span style="color:var(--text3)">⚪ 1-LLM — Single model only</span>
+    </div>
+  </div>
+
+  <!-- Consensus table -->
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:12px" id="consensusTable">
+      <thead>
+        <tr style="background:var(--surface2);border-bottom:2px solid var(--border)">
+          <th style="padding:10px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">#</th>
+          <th style="padding:10px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Ticker</th>
+          <th style="padding:10px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:#7dd3fc;text-transform:uppercase">Claude</th>
+          <th style="padding:10px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:#fb923c;text-transform:uppercase">Grok</th>
+          <th style="padding:10px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:#86efac;text-transform:uppercase">OpenAI</th>
+          <th style="padding:10px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:#c084fc;text-transform:uppercase">Gemini</th>
+          <th style="padding:10px 12px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Est SI%</th>
+          <th style="padding:10px 12px;text-align:right;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">DTC</th>
+          <th style="padding:10px 12px;text-align:left;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Catalyst</th>
+          <th style="padding:10px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Action</th>
+          <th style="padding:10px 12px;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase">Date</th>
+        </tr>
+      </thead>
+      <tbody id="consensusTbody">
+        <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--text3)">Click a tab to load data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="consensusEmpty" style="display:none;text-align:center;padding:60px 20px">
+    <div style="font-size:48px;margin-bottom:16px">🧠</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px">No consensus data yet</div>
+    <div style="color:var(--text3);font-size:13px">Run Screen first — the 4-LLM universe build populates this table automatically.</div>
+  </div>
+</div>
 
 <!-- ═══════ MODALS ═══════ -->
 
@@ -1736,6 +1828,7 @@ function switchTab(tabId) {
   if (tabId === 'squeeze') { if (!currentResults.length) loadExistingResults(); }
   if (tabId === 'runs') loadRunsTab();
   if (tabId === 'predictions') loadPredictionsTab();
+  if (tabId === 'consensus') loadConsensusTab();
   if (tabId === 'billing') loadBillingTab();
 }
 
@@ -3043,12 +3136,15 @@ async function loadBillingTab() {
     const data = await r.json();
 
     const setKey = (id, dotId, hasKey) => {
-      document.getElementById(id).textContent = hasKey ? '✓ Configured' : '✗ Missing — check .env';
-      document.getElementById(id).style.color = hasKey ? 'var(--accent3)' : 'var(--accent2)';
+      const el = document.getElementById(id);
       const dot = document.getElementById(dotId);
+      if (el) {
+        el.textContent = hasKey ? '✓ Configured' : '✗ Missing — check .env';
+        el.style.color = hasKey ? 'var(--accent3)' : 'var(--accent2)';
+      }
       if (dot) {
-        dot.style.background = hasKey ? 'var(--accent3)' : 'var(--accent2)';
-        dot.style.boxShadow = hasKey ? '0 0 8px var(--accent3)' : '0 0 8px var(--accent2)';
+        dot.style.background  = hasKey ? 'var(--accent3)' : 'var(--accent2)';
+        dot.style.boxShadow   = hasKey ? '0 0 8px var(--accent3)' : '0 0 8px var(--accent2)';
       }
     };
 
@@ -3056,7 +3152,119 @@ async function loadBillingTab() {
     setKey('key_massive',   'dot_massive',   data.massive_key);
     setKey('key_tavily',    'dot_tavily',    data.tavily_key);
     setKey('key_finnhub',   'dot_finnhub',   data.finnhub_key);
+    setKey('key_openai',    'dot_openai',    data.openai_key);
+    setKey('key_grok',      'dot_grok',      data.grok_key);
+    setKey('key_gemini',    'dot_gemini',    data.gemini_key);
   } catch(e) { console.error('loadBillingTab:', e); }
+}
+
+// ═══════════════════════════════════════════════════════
+// LLM CONSENSUS TAB
+// ═══════════════════════════════════════════════════════
+
+function consensusRowStyle(level) {
+  if (level === 4) return 'background:rgba(255,77,109,0.08);border-left:3px solid var(--accent2)';
+  if (level === 3) return 'background:rgba(181,255,77,0.06);border-left:3px solid var(--accent3)';
+  if (level === 2) return 'background:rgba(0,229,255,0.05);border-left:3px solid var(--accent)';
+  return 'border-left:3px solid var(--border)';
+}
+
+function checkCell(val) {
+  return val
+    ? `<span style="color:var(--accent3);font-weight:700;font-size:16px">✓</span>`
+    : `<span style="color:var(--border2);font-size:14px">—</span>`;
+}
+
+async function loadConsensusTab() {
+  const dateVal = document.getElementById('consensusDateFilter')?.value || '';
+  const url = `/api/llm_consensus${dateVal ? `?run_date=${dateVal}` : ''}`;
+
+  try {
+    const r    = await fetch(url);
+    const json = await r.json();
+
+    // Populate date dropdown
+    const sel = document.getElementById('consensusDateFilter');
+    if (sel && json.dates && json.dates.length) {
+      const current = sel.value;
+      sel.innerHTML = json.dates.map(d =>
+        `<option value="${d}" ${d === current ? 'selected' : ''}>${d}</option>`
+      ).join('');
+    }
+
+    const tbody = document.getElementById('consensusTbody');
+    const empty = document.getElementById('consensusEmpty');
+
+    if (!json.data || json.data.length === 0) {
+      tbody.innerHTML = '';
+      if (empty) empty.style.display = 'block';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    tbody.innerHTML = json.data.map((row, i) => {
+      const level   = row.llm_consensus || 1;
+      const rowStyle = consensusRowStyle(level);
+      const badge    = row.badge || '';
+      const inSq     = row.in_squeeze;
+      const btnStyle = inSq
+        ? 'background:rgba(181,255,77,0.15);border:1px solid var(--accent3);color:var(--accent3);cursor:default'
+        : 'background:rgba(0,229,255,0.1);border:1px solid var(--accent);color:var(--accent);cursor:pointer';
+      const btnLabel = inSq ? '✓ In Short Squeeze' : '➕ Add to Squeeze';
+      const catalyst = (row.catalyst || '').substring(0, 35) + ((row.catalyst || '').length > 35 ? '…' : '');
+
+      return `<tr style="${rowStyle};transition:background 0.15s" onmouseover="this.style.filter='brightness(1.15)'" onmouseout="this.style.filter=''">
+        <td style="padding:10px 12px;font-family:var(--font-mono);font-size:11px;color:var(--text3)">${i+1}</td>
+        <td style="padding:10px 12px">
+          <div style="font-weight:800;font-size:14px">${row.ticker}</div>
+          <div style="font-size:10px;font-family:var(--font-mono);color:var(--text3);margin-top:2px">${badge}</div>
+        </td>
+        <td style="padding:10px 12px;text-align:center">${checkCell(row.claude)}</td>
+        <td style="padding:10px 12px;text-align:center">${checkCell(row.grok)}</td>
+        <td style="padding:10px 12px;text-align:center">${checkCell(row.openai)}</td>
+        <td style="padding:10px 12px;text-align:center">${checkCell(row.gemini)}</td>
+        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);font-size:12px;color:var(--accent4)">${row.est_short_float ? row.est_short_float.toFixed(1)+'%' : '—'}</td>
+        <td style="padding:10px 12px;text-align:right;font-family:var(--font-mono);font-size:12px">${row.est_dtc ? row.est_dtc.toFixed(1) : '—'}</td>
+        <td style="padding:10px 12px;font-size:11px;color:var(--text2);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${row.catalyst||''}">${catalyst || '—'}</td>
+        <td style="padding:10px 12px;text-align:center">
+          <button onclick="consensusMoveToSqueeze('${row.ticker}', this)"
+            style="padding:5px 12px;border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);${btnStyle}"
+            ${inSq ? 'disabled' : ''}>
+            ${btnLabel}
+          </button>
+        </td>
+        <td style="padding:10px 12px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">${row.run_date}</td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    console.error('loadConsensusTab:', e);
+    const tbody = document.getElementById('consensusTbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:30px;color:var(--accent2)">Error loading consensus data: ${e.message}</td></tr>`;
+  }
+}
+
+async function consensusMoveToSqueeze(ticker, btn) {
+  btn.disabled  = true;
+  btn.textContent = '⏳ Adding...';
+
+  try {
+    const r = await fetch(`/api/llm_consensus/move/${ticker}`, {method: 'POST'});
+    const d = await r.json();
+
+    if (r.ok) {
+      btn.textContent = '✓ In Short Squeeze';
+      btn.style.cssText = 'padding:5px 12px;border-radius:var(--radius);font-size:11px;font-family:var(--font-mono);background:rgba(181,255,77,0.15);border:1px solid var(--accent3);color:var(--accent3);cursor:default';
+    } else {
+      btn.disabled = false;
+      btn.textContent = '➕ Add to Squeeze';
+      alert(`Failed to add ${ticker}: ${d.detail || 'Unknown error'}`);
+    }
+  } catch(e) {
+    btn.disabled  = false;
+    btn.textContent = '➕ Add to Squeeze';
+    alert(`Error: ${e.message}`);
+  }
 }
 </script>
 </body>

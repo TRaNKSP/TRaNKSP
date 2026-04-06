@@ -275,16 +275,18 @@ async def build_multi_llm_universe(count_per_llm: int = 25) -> Dict[str, Any]:
 
     merged = _build_consensus(valid)
 
-    # === ENHANCED DB SAVE WITH CONSENSUS LEVEL ===
-    import sqlite3, os as _os
+    # === SAVE TO squeeze_universe (consensus level) ===
+    import sqlite3 as _sqlite3, os as _os
     DB_PATH = _os.path.join("data", "tranksp.db")
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _sqlite3.connect(DB_PATH)
+    conn.row_factory = _sqlite3.Row
     c = conn.cursor()
     added = 0
+    today = date.today().isoformat()
 
     for cand in merged["ranked"]:
         level = cand.get("llm_consensus", 1)
+        # Save to squeeze_universe (aggregate)
         c.execute("""
             INSERT OR REPLACE INTO squeeze_universe
             (ticker, source, source_llm, llm_consensus,
@@ -305,9 +307,25 @@ async def build_multi_llm_universe(count_per_llm: int = 25) -> Dict[str, Any]:
         if c.rowcount > 0:
             added += 1
 
+        # === SAVE PER-LLM ROW TO llm_daily_suggestions ===
+        for source in cand.get("sources", []):
+            c.execute("""
+                INSERT OR IGNORE INTO llm_daily_suggestions
+                (run_date, llm_name, ticker, est_short_float,
+                 est_dtc, catalyst, catalyst_type, confidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                today, source, cand["ticker"],
+                cand.get("est_short_float"),
+                cand.get("est_dtc"),
+                cand.get("catalyst"),
+                cand.get("catalyst_type"),
+                cand.get("confidence"),
+            ))
+
     conn.commit()
     conn.close()
-    logger.info(f"[MultiLLM] Saved {added} tickers to squeeze_universe")
+    logger.info(f"[MultiLLM] Saved {added} tickers to squeeze_universe + per-LLM rows to llm_daily_suggestions")
 
     # Add badge to each ranked ticker
     for cand in merged["ranked"]:

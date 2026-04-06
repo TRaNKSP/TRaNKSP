@@ -236,6 +236,23 @@ MIGRATIONS = [
     )
     """,
 
+    # ── LLM Daily Suggestions (4-LLM Consensus page) ────────────────────────────
+    """
+    CREATE TABLE IF NOT EXISTS llm_daily_suggestions (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_date        DATE    NOT NULL,
+        llm_name        TEXT    NOT NULL,
+        ticker          TEXT    NOT NULL,
+        est_short_float REAL,
+        est_dtc         REAL,
+        catalyst        TEXT,
+        catalyst_type   TEXT,
+        confidence      REAL,
+        added_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(run_date, llm_name, ticker)
+    )
+    """,
+
     # ── Calibration stats (Phase 3) ───────────────────────────────────────────
     """
     CREATE TABLE IF NOT EXISTS calibration_stats (
@@ -336,6 +353,10 @@ def run_migrations():
         ("si_at_outcome",        "REAL"),
     ]:
         _add_col(cursor, "squeeze_predictions", col, defn)
+
+    # llm_daily_suggestions — in case table exists without catalyst_type
+    _add_col(cursor, "llm_daily_suggestions", "catalyst_type", "TEXT")
+    _add_col(cursor, "llm_daily_suggestions", "squeeze_score", "REAL")
 
     conn.commit()
     conn.close()
