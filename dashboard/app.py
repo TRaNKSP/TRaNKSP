@@ -94,11 +94,11 @@ def setup_scheduler():
         replace_existing=True
     )
 
-    from agents.squeeze.prediction_tracker import run_daily_outcome_check as _pt_daily
+    from agents.squeeze.prediction_tracker import daily_outcome_update
     scheduler.add_job(
-        _pt_daily,
-        CronTrigger(hour=8, minute=50),
-        id="daily_prediction_outcomes",
+        lambda: asyncio.create_task(daily_outcome_update()),
+        CronTrigger(hour=9, minute=0),
+        id="daily_outcome_update",
         replace_existing=True
     )
     scheduler.start()

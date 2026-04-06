@@ -1,18 +1,20 @@
 """
 TRaNKSP — Layer 1: Outcome Tracking (Fully Complete)
 
-Records every thesis as a structured prediction and later fills in
-the outcome when the squeeze plays out (HIT / MISS / PARTIAL / EXPIRED).
+Records every prediction and later fills outcomes for learning.
+Exact implementation per the AI_Closed_Loop_with_code.docx specification.
 
-This is the non-negotiable foundation of the self-learning loop:
-  Predict → Track Outcome → Measure Accuracy → Update Model → Better Predict
-
-Functions:
-  record_prediction()        — called after every thesis generation
-  update_prediction_outcome()— called by daily scheduler job
-  calculate_outcome_result() — logic: HIT / MISS / PARTIAL / EXPIRED
-  get_open_predictions()     — daily job iterates these
-  get_prediction_stats()     — dashboard summary stats
+squeeze_predictions table fields (all from document):
+  ticker, prediction_date, predicted_direction (UP/DOWN)
+  entry_price, target_price, confidence_score
+  time_horizon ("3-7 days")
+  catalyst_types that were cited
+  thesis_id (links back to full thesis)
+  outcome_price (filled in later)
+  outcome_date
+  outcome_result (HIT / MISS / PARTIAL / EXPIRED)
+  actual_peak, actual_drawdown
+  si_at_prediction, si_at_outcome
 """
 
 import sqlite3
@@ -26,10 +28,10 @@ logger = logging.getLogger("tranksp.prediction_tracker")
 DB_PATH = os.path.join("data", "tranksp.db")
 
 
-def _conn():
-    c = sqlite3.connect(DB_PATH)
-    c.row_factory = sqlite3.Row
-    return c
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 # ── Record new prediction ─────────────────────────────────────────────────────
@@ -43,30 +45,24 @@ def record_prediction(
     dtc:          Optional[float] = None,
     volume_ratio: Optional[float] = None,
     si_trend:     Optional[str]   = None,
+    thesis_id:    Optional[int]   = None,
 ) -> Optional[int]:
     """
-    Call immediately after a new thesis is generated for a ticker.
-    Stores the prediction so it can be evaluated later.
-
-    Args:
-        thesis: ThesisOutput.model_dump() dict — must contain
-                confidence, time_horizon, catalyst_types, setup
-
-    Returns:
-        prediction id (int) or None on failure
+    Call right after generating a new thesis.
+    Stores all Layer 1 required fields including si_at_prediction.
+    Returns prediction id or None on failure.
     """
-    conn = _conn()
+    conn = get_db()
     c    = conn.cursor()
 
-    # Deduplicate: don't double-record same ticker on same date
+    # Deduplicate — don't double-record same ticker+date
     c.execute("""
         SELECT id FROM squeeze_predictions
-        WHERE ticker=? AND prediction_date=? AND status='OPEN'
-        LIMIT 1
+        WHERE ticker=? AND prediction_date=? AND status='OPEN' LIMIT 1
     """, (ticker, date.today().isoformat()))
     if c.fetchone():
         conn.close()
-        logger.debug(f"[PredTracker] {ticker} already has an open prediction today — skipping")
+        logger.debug(f"[PredTracker] {ticker} already has OPEN prediction today — skipping")
         return None
 
     catalyst_str = (
@@ -75,26 +71,35 @@ def record_prediction(
         else str(thesis.get("catalyst_types", "[]"))
     )
 
-    # Derive a target_price: entry × (1 + confidence/100 × 0.5)
-    confidence   = float(thesis.get("confidence", 50.0))
-    target_price = round(entry_price * (1 + confidence / 200), 2) if entry_price > 0 else None
+    confidence = float(thesis.get("confidence", 50.0))
+
+    # Use thesis target_price if set, otherwise derive from entry + confidence
+    target_price = thesis.get("target_price") or round(
+        entry_price * (1 + confidence / 200), 2
+    ) if entry_price and entry_price > 0 else None
 
     sql = """
         INSERT INTO squeeze_predictions (
-            ticker, run_id, prediction_date, entry_price, target_price,
+            ticker, run_id, thesis_id,
+            prediction_date, predicted_direction,
+            entry_price, target_price, confidence_score,
             direction, confidence, time_horizon, catalyst_types,
-            short_float_at_pred, dtc_at_pred, volume_ratio_at_pred,
+            short_float_at_pred, si_at_prediction,
+            dtc_at_pred, volume_ratio_at_pred,
             si_trend_at_pred, thesis_summary, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OPEN')
     """
+
     values = (
-        ticker, run_id, date.today().isoformat(),
-        entry_price, target_price,
-        "UP",                                      # squeeze = always bullish at entry
-        confidence,
+        ticker, run_id, thesis_id,
+        date.today().isoformat(), "UP",         # predicted_direction always UP for squeeze
+        entry_price, target_price, confidence,   # confidence_score = confidence
+        "UP", confidence,                        # direction + confidence (redundant but schema has both)
         thesis.get("time_horizon", "1-2 weeks"),
         catalyst_str,
-        short_float, dtc, volume_ratio, si_trend,
+        short_float, short_float,                # short_float_at_pred AND si_at_prediction
+        dtc, volume_ratio,
+        si_trend,
         (thesis.get("setup") or "")[:600],
     )
 
@@ -102,48 +107,55 @@ def record_prediction(
         c.execute(sql, values)
         pred_id = c.lastrowid
         conn.commit()
-        logger.info(f"[PredTracker] ✓ Recorded prediction #{pred_id} for {ticker} "
-                    f"entry=${entry_price:.2f} target=${target_price or 0:.2f} conf={confidence:.0f}%")
+        logger.info(f"✅ [PredTracker] Recorded #{pred_id} for {ticker} "
+                    f"entry=${entry_price:.2f} target=${target_price or 0:.2f} "
+                    f"SI={short_float or 0:.1f}% conf={confidence:.0f}%")
         return pred_id
     except Exception as e:
-        logger.error(f"[PredTracker] Failed to record {ticker}: {e}")
+        logger.error(f"❌ [PredTracker] Failed for {ticker}: {e}")
         return None
     finally:
         conn.close()
 
 
-# ── Calculate outcome ─────────────────────────────────────────────────────────
+# ── Calculate outcome result ──────────────────────────────────────────────────
 
 def calculate_outcome_result(
-    entry_price:   float,
-    target_price:  float,
-    current_price: float,
-    pred_date_str: str,
-    time_horizon:  str = "1-2 weeks",
-    lifecycle_status: str = "ACTIVE"
-) -> str:
+    entry_price:      float,
+    target_price:     float,
+    current_price:    float,
+    pred_date_str:    str,
+    time_horizon:     str = "1-2 weeks",
+    lifecycle_status: str = "ACTIVE",
+    si_at_pred:       float = 0,
+    si_current:       float = 0,
+) -> Optional[str]:
     """
-    Determine HIT / MISS / PARTIAL / EXPIRED for a prediction.
-
-    Rules:
-      HIT      — current_price >= target_price  OR  lifecycle = SQUEEZE_COMPLETE
-      MISS     — price dropped >20% below entry  OR  lifecycle = FAILED/REVERSAL
-      PARTIAL  — time expired, made some progress (>50% to target)
-      EXPIRED  — time expired, little/no progress
+    HIT      — price hit target OR lifecycle = SQUEEZE_COMPLETE
+    MISS     — price down >20% from entry OR lifecycle FAILED/REVERSAL
+    PARTIAL  — expired, made 40%+ progress toward target
+    EXPIRED  — time window closed with little progress
+    None     — still within time window, keep OPEN
     """
     if not entry_price or entry_price <= 0:
         return "EXPIRED"
 
+    # Lifecycle shortcut
+    if lifecycle_status == "SQUEEZE_COMPLETE":
+        return "HIT"
+    if lifecycle_status in ("FAILED", "REVERSAL"):
+        return "MISS"
+
     # Days elapsed
     try:
-        pred_date  = datetime.strptime(pred_date_str, "%Y-%m-%d").date()
+        pred_date    = datetime.strptime(pred_date_str, "%Y-%m-%d").date()
         days_elapsed = (date.today() - pred_date).days
     except Exception:
         days_elapsed = 0
 
     # Max days from time_horizon string
     max_days = 14
-    tl = (time_horizon or "").lower()
+    tl   = (time_horizon or "").lower()
     nums = [int(s) for s in tl.split() if s.isdigit()]
     if "month" in tl:
         max_days = (max(nums) if nums else 1) * 30
@@ -152,82 +164,87 @@ def calculate_outcome_result(
     elif "day" in tl:
         max_days = max(nums) if nums else 7
 
-    # Lifecycle shortcut
-    if lifecycle_status == "SQUEEZE_COMPLETE":
+    # Price-based HIT
+    if target_price and target_price > 0 and current_price >= target_price:
         return "HIT"
-    if lifecycle_status in ("FAILED", "REVERSAL"):
+
+    # Price-based MISS (down >20% from entry)
+    if current_price <= entry_price * 0.80:
         return "MISS"
 
-    # Price-based
-    if target_price and target_price > 0:
-        if current_price >= target_price:
-            return "HIT"
+    # SI collapse check (SI dropped >50% = squeeze failed)
+    if si_at_pred > 0 and si_current > 0:
+        si_drop = (si_at_pred - si_current) / si_at_pred
+        if si_drop > 0.50 and current_price < entry_price:
+            return "MISS"
 
-    if entry_price > 0 and current_price <= entry_price * 0.80:
-        return "MISS"                              # down >20% = failed squeeze
-
+    # Time expired
     if days_elapsed >= max_days:
-        # Expired — was there meaningful progress?
         if target_price and target_price > entry_price:
             pct_progress = (current_price - entry_price) / (target_price - entry_price)
             return "PARTIAL" if pct_progress >= 0.40 else "EXPIRED"
         return "EXPIRED"
 
-    return None   # Still open — don't close yet
+    return None   # Still OPEN
 
 
 # ── Update outcome ────────────────────────────────────────────────────────────
 
 def update_prediction_outcome(
-    ticker:         str,
-    outcome_price:  float,
-    actual_peak:    Optional[float] = None,
-    outcome_result: str             = "MISS",
-    days_to_outcome: Optional[int] = None,
-    si_at_outcome:  Optional[float] = None,
+    ticker:          str,
+    outcome_price:   float,
+    actual_peak:     Optional[float] = None,
+    outcome_result:  str             = "MISS",
+    days_to_outcome: Optional[int]   = None,
+    si_at_outcome:   Optional[float] = None,
 ) -> int:
-    """
-    Close an open prediction with its final outcome.
-    Called by the daily scheduler job.
-
-    Returns: number of rows updated
-    """
-    conn = _conn()
+    """Update outcome fields and close prediction. Called by daily job."""
+    conn = get_db()
     c    = conn.cursor()
 
-    today = date.today().isoformat()
-    sql   = """
+    # Calculate actual_drawdown (peak → outcome drop)
+    actual_drawdown = None
+    if actual_peak and outcome_price and actual_peak > 0:
+        actual_drawdown = round((actual_peak - outcome_price) / actual_peak * 100, 2)
+
+    sql = """
         UPDATE squeeze_predictions
         SET outcome_price    = ?,
             outcome_date     = ?,
             outcome          = ?,
+            outcome_result   = ?,
             actual_peak      = ?,
+            actual_drawdown  = ?,
             days_to_outcome  = ?,
+            si_at_outcome    = ?,
             status           = 'CLOSED',
-            outcome_pnl_pct  = ROUND((?-entry_price)/entry_price*100, 2)
-        WHERE ticker = ?
-          AND status = 'OPEN'
+            outcome_pnl_pct  = ROUND((? - entry_price) / entry_price * 100, 2)
+        WHERE ticker = ? AND status = 'OPEN'
     """
     c.execute(sql, (
-        outcome_price, today, outcome_result, actual_peak,
-        days_to_outcome, outcome_price, ticker
+        outcome_price, date.today().isoformat(),
+        outcome_result, outcome_result,           # outcome + outcome_result both
+        actual_peak, actual_drawdown,
+        days_to_outcome, si_at_outcome,
+        outcome_price, ticker
     ))
     updated = c.rowcount
     conn.commit()
     conn.close()
 
     if updated > 0:
-        logger.info(f"[PredTracker] Closed {updated} prediction(s) for {ticker} → {outcome_result} "
-                    f"exit=${outcome_price:.2f} peak=${actual_peak or 0:.2f}")
+        logger.info(f"✅ [PredTracker] Closed {updated} prediction(s) for {ticker} → "
+                    f"{outcome_result} exit=${outcome_price:.2f} "
+                    f"drawdown={actual_drawdown or 0:.1f}%")
     return updated
 
 
-# ── Daily outcome check (called by APScheduler) ───────────────────────────────
+# ── Daily outcome check ───────────────────────────────────────────────────────
 
-async def run_daily_outcome_check():
+async def daily_outcome_update():
     """
-    APScheduler job — runs daily at 8:45 AM CT.
-    Fetches current price for each open prediction and evaluates outcome.
+    Called by APScheduler at 9:00 AM CT.
+    Evaluates all open predictions against current lifecycle + price data.
     """
     from .yahoo_quote import get_quote_data
 
@@ -237,17 +254,22 @@ async def run_daily_outcome_check():
         return
 
     logger.info(f"[PredTracker] Evaluating {len(open_preds)} open predictions...")
-    evaluated = 0
 
-    # Get lifecycle statuses in bulk
-    conn = _conn()
+    # Get current lifecycle statuses
+    conn = get_db()
     c    = conn.cursor()
-    lifecycle_map: Dict[str, str] = {}
-    c.execute("SELECT ticker, status FROM squeeze_lifecycle WHERE snapshot_date=(SELECT MAX(snapshot_date) FROM squeeze_lifecycle sl2 WHERE sl2.ticker=squeeze_lifecycle.ticker)")
-    for row in c.fetchall():
-        lifecycle_map[row["ticker"]] = row["status"]
+    c.execute("""
+        SELECT ticker, status, peak_price, short_interest
+        FROM squeeze_lifecycle
+        WHERE snapshot_date = (
+            SELECT MAX(snapshot_date) FROM squeeze_lifecycle sl2
+            WHERE sl2.ticker = squeeze_lifecycle.ticker
+        )
+    """)
+    lc_map: Dict[str, Dict] = {row["ticker"]: dict(row) for row in c.fetchall()}
     conn.close()
 
+    evaluated = 0
     for pred in open_preds:
         ticker = pred["ticker"]
         try:
@@ -256,57 +278,54 @@ async def run_daily_outcome_check():
                 continue
 
             current_price    = quote["price"]
-            lifecycle_status = lifecycle_map.get(ticker, "ACTIVE")
+            si_current       = quote.get("short_float", 0)
+            lc               = lc_map.get(ticker, {})
+            lifecycle_status = lc.get("status", "ACTIVE")
+            actual_peak      = lc.get("peak_price") or current_price
 
             result = calculate_outcome_result(
-                entry_price      = pred.get("entry_price", 0),
-                target_price     = pred.get("target_price", 0),
+                entry_price      = pred.get("entry_price", 0) or 0,
+                target_price     = pred.get("target_price", 0) or 0,
                 current_price    = current_price,
                 pred_date_str    = pred.get("prediction_date", ""),
                 time_horizon     = pred.get("time_horizon", "1-2 weeks"),
                 lifecycle_status = lifecycle_status,
+                si_at_pred       = pred.get("si_at_prediction", 0) or 0,
+                si_current       = si_current,
             )
 
             if result:
-                # Get lifecycle peak for actual_peak
-                lc_conn = _conn()
-                lc_c    = lc_conn.cursor()
-                lc_c.execute("SELECT peak_price FROM squeeze_lifecycle WHERE ticker=? ORDER BY snapshot_date DESC LIMIT 1", (ticker,))
-                lc_row      = lc_c.fetchone()
-                actual_peak = lc_row["peak_price"] if lc_row else current_price
-                lc_conn.close()
-
                 pred_date = datetime.strptime(pred["prediction_date"], "%Y-%m-%d").date()
                 days      = (date.today() - pred_date).days
-
                 update_prediction_outcome(
                     ticker          = ticker,
                     outcome_price   = current_price,
                     actual_peak     = actual_peak,
                     outcome_result  = result,
                     days_to_outcome = days,
-                    si_at_outcome   = quote.get("short_float"),
+                    si_at_outcome   = si_current,
                 )
                 evaluated += 1
 
         except Exception as e:
             logger.warning(f"[PredTracker] Error evaluating {ticker}: {e}")
 
-    logger.info(f"[PredTracker] Daily check complete — {evaluated} predictions closed")
+    logger.info(f"[PredTracker] Done — {evaluated} predictions closed")
 
-    # Trigger calibration recompute
+    # Recompute calibration stats after closing predictions
     if evaluated > 0:
         try:
             from .learning_engine import compute_calibration_stats
             compute_calibration_stats()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[PredTracker] Calibration recompute error: {e}")
 
 
-# ── Query helpers ─────────────────────────────────────────────────────────────
+# ── Queries ───────────────────────────────────────────────────────────────────
 
-def get_open_predictions(limit: int = 200) -> List[Dict]:
-    conn = _conn()
+def get_open_predictions(limit: int = 100) -> List[Dict]:
+    """Daily job iterates these."""
+    conn = get_db()
     c    = conn.cursor()
     c.execute("""
         SELECT * FROM squeeze_predictions
@@ -314,32 +333,36 @@ def get_open_predictions(limit: int = 200) -> List[Dict]:
         ORDER BY prediction_date ASC
         LIMIT ?
     """, (limit,))
-    rows = [dict(r) for r in c.fetchall()]
+    rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
 
 
 def get_prediction_stats() -> Dict:
-    """Summary stats for dashboard Predictions tab."""
-    conn = _conn()
+    """Summary stats for Predictions tab dashboard."""
+    conn = get_db()
     c    = conn.cursor()
     c.execute("""
         SELECT
-            COUNT(*)                                                  AS total,
-            SUM(CASE WHEN status='OPEN'   THEN 1 ELSE 0 END)         AS open,
-            SUM(CASE WHEN status='CLOSED' THEN 1 ELSE 0 END)         AS closed,
-            SUM(CASE WHEN outcome='HIT'   THEN 1 ELSE 0 END)         AS hits,
-            SUM(CASE WHEN outcome='MISS'  THEN 1 ELSE 0 END)         AS misses,
-            SUM(CASE WHEN outcome='PARTIAL' THEN 1 ELSE 0 END)       AS partials,
+            COUNT(*)                                                AS total,
+            SUM(CASE WHEN status='OPEN'     THEN 1 ELSE 0 END)    AS open,
+            SUM(CASE WHEN status='CLOSED'   THEN 1 ELSE 0 END)    AS closed,
+            SUM(CASE WHEN outcome='HIT'     THEN 1 ELSE 0 END)    AS hits,
+            SUM(CASE WHEN outcome='MISS'    THEN 1 ELSE 0 END)    AS misses,
+            SUM(CASE WHEN outcome='PARTIAL' THEN 1 ELSE 0 END)    AS partials,
             ROUND(AVG(CASE WHEN outcome_pnl_pct IS NOT NULL
-                           THEN outcome_pnl_pct END), 2)             AS avg_pnl_pct,
+                           THEN outcome_pnl_pct END), 2)          AS avg_pnl_pct,
             ROUND(
               100.0 * SUM(CASE WHEN outcome IN ('HIT','PARTIAL') THEN 1 ELSE 0 END)
               / NULLIF(SUM(CASE WHEN status='CLOSED' THEN 1 ELSE 0 END), 0),
-              1)                                                      AS accuracy_pct
+              1)                                                   AS accuracy_pct
         FROM squeeze_predictions
     """)
     row   = c.fetchone()
     stats = dict(row) if row else {}
     conn.close()
     return stats
+
+
+# Backwards compat alias used by learning_engine.py
+run_daily_outcome_check = daily_outcome_update

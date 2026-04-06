@@ -17,6 +17,7 @@ class ThesisOutput(BaseModel):
     confidence: float = Field(default=50.0, ge=0.0, le=100.0, description="Confidence score 0-100")
     time_horizon: str = Field(default="1-2 weeks", description="Expected time horizon: days, weeks, 1-2 months, etc.")
     bullish_score: float = Field(default=50.0, ge=0.0, le=100.0, description="Overall bullish squeeze score 0-100")
+    target_price: Optional[float] = Field(default=None, description="Expected target price for this squeeze play")
 
 
 class BearishThesisOutput(BaseModel):

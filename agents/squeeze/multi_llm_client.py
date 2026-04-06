@@ -1,78 +1,71 @@
 """
-TRaNKSP — Multi-LLM Client
+TRaNKSP — Multi-LLM Universe Builder
 
-Queries multiple LLM providers in parallel for universe building and thesis
-generation. Aggregating across models makes the output more robust — a ticker
-that multiple independent LLMs agree on is a stronger signal than one only
-one model picks.
+Queries Claude, Grok (xAI), OpenAI (GPT), and Gemini in parallel.
+Returns consensus-ranked tickers — agreed on by multiple models = stronger signal.
 
-Supported providers:
-  - Anthropic Claude  (claude-haiku-4-5-20251001)   → ANTHROPIC_API_KEY
-  - OpenAI GPT-4o-mini                              → OPENAI_API_KEY
-  - xAI Grok-2                                      → GROK_API_KEY
-  - Google Gemini 1.5 Flash                         → GEMINI_API_KEY
+Environment variables (set in .env):
+  ANTHROPIC_API_KEY  — required (Claude)
+  XAI_API_KEY        — optional (Grok-2)
+  OPENAI_API_KEY     — optional (GPT-4o-mini)
+  GOOGLE_API_KEY     — optional (Gemini 2.0 Flash)
 
-If a key is missing the provider is skipped gracefully.
-Results are deduplicated + ranked by mention count across models.
+Note: XAI_API_KEY and GOOGLE_API_KEY match the uploaded multi_llm_universe.py spec.
+      These are checked FIRST; GROK_API_KEY / GEMINI_API_KEY are accepted as aliases.
 """
 
 import os
 import json
-import logging
 import asyncio
-from typing import List, Dict, Any, Optional
+import logging
 from datetime import date
+from collections import defaultdict
+from typing import List, Dict, Any, Set
 
 logger = logging.getLogger("tranksp.multi_llm")
 
-# ── Shared prompt template ─────────────────────────────────────────────────────
+# ── Prompt ────────────────────────────────────────────────────────────────────
 
-UNIVERSE_PROMPT = """You are a short squeeze intelligence analyst with deep knowledge of current US equity markets.
-
+UNIVERSE_PROMPT = """You are an expert short squeeze analyst.
 Today's date: {today}
 
-Identify the top {count} most compelling short squeeze candidates in the US market RIGHT NOW.
+Return the **top {count}** most compelling short squeeze candidates right now.
 
-Focus on:
-- Short interest > 15% of float (ideally > 25%)
-- Days to cover > 3 (ideally > 5)
-- Float under 50M shares
-- Upcoming catalysts (earnings, FDA, contracts, news)
-- Active retail / WSB attention OR institutional momentum
-
-Include a mix of sectors and market caps.
-
-Respond ONLY with a valid JSON array. No markdown fences, no preamble.
-Each item MUST have exactly these fields:
+For each ticker, respond with a JSON array like this:
 [
   {{
-    "ticker": "SYMBOL",
-    "est_short_float": 35.2,
-    "est_days_to_cover": 4.5,
-    "float_size_m": 12.5,
-    "catalyst": "brief catalyst",
-    "catalyst_type": "earnings|fda|momentum|technical|news|squeeze_history",
-    "squeeze_reason": "one sentence why this is a squeeze candidate",
-    "confidence": 72
+    "ticker": "GME",
+    "est_short_float": 18.5,
+    "est_days_to_cover": 4.2,
+    "catalyst": "Earnings beat + console cycle",
+    "catalyst_type": "earnings",
+    "squeeze_reason": "High SI + strong retail momentum",
+    "confidence": 82
   }}
 ]
 
-Return exactly {count} items."""
+Rules:
+- Only US-listed stocks (NYSE/NASDAQ)
+- Focus on realistic squeeze potential (SI > 10%, DTC > 2, catalysts)
+- Do NOT add any extra text outside the JSON array."""
+
+
+def _get_key(primary: str, alias: str = "") -> str:
+    """Get API key checking primary name then alias."""
+    return os.environ.get(primary, "") or os.environ.get(alias, "")
 
 
 def _clean_json(raw: str) -> List[Dict]:
-    """Strip markdown fences and extract JSON array from LLM response."""
+    """Strip markdown fences and extract JSON array."""
     raw = raw.strip()
-    if "```" in raw:
-        for part in raw.split("```"):
-            part = part.strip().lstrip("json").strip()
-            if part.startswith("["):
-                raw = part
-                break
+    if "```json" in raw:
+        raw = raw.split("```json")[1].split("```")[0]
+    elif "```" in raw:
+        raw = raw.split("```")[1].split("```")[0]
     start = raw.find("[")
-    end   = raw.rfind("]")
-    if start != -1 and end != -1:
-        raw = raw[start:end+1]
+    end   = raw.rfind("]") + 1
+    if start != -1 and end > start:
+        raw = raw[start:end]
     try:
         return json.loads(raw)
     except Exception:
@@ -80,7 +73,6 @@ def _clean_json(raw: str) -> List[Dict]:
 
 
 def _normalize(items: List[Dict], source: str) -> List[Dict]:
-    """Normalize and validate items from any provider."""
     result = []
     for item in items:
         ticker = str(item.get("ticker", "")).upper().strip()
@@ -90,7 +82,6 @@ def _normalize(items: List[Dict], source: str) -> List[Dict]:
             "ticker":          ticker,
             "est_short_float": float(item.get("est_short_float", 0)),
             "est_dtc":         float(item.get("est_days_to_cover", 0)),
-            "float_size_m":    float(item.get("float_size_m", 0)),
             "catalyst":        str(item.get("catalyst", "")),
             "catalyst_type":   str(item.get("catalyst_type", "momentum")),
             "squeeze_reason":  str(item.get("squeeze_reason", "")),
@@ -102,197 +93,200 @@ def _normalize(items: List[Dict], source: str) -> List[Dict]:
 
 # ── Per-provider fetchers ──────────────────────────────────────────────────────
 
-async def _fetch_anthropic(count: int, today: str) -> List[Dict]:
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+async def _fetch_claude(count: int, today: str) -> List[Dict]:
+    api_key = _get_key("ANTHROPIC_API_KEY")
     if not api_key:
         return []
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
         prompt = UNIVERSE_PROMPT.format(count=count, today=today)
-        msg    = await asyncio.to_thread(
+        msg = await asyncio.to_thread(
             client.messages.create,
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
+            model="claude-3-5-sonnet-20241022",   # sonnet for universe quality
+            max_tokens=3000,
+            temperature=0.7,
             messages=[{"role": "user", "content": prompt}]
         )
-        items = _clean_json(msg.content[0].text)
+        items  = _clean_json(msg.content[0].text)
         result = _normalize(items, "claude")
-        logger.info(f"[MultiLLM] Claude: {len(result)} tickers")
+        logger.info(f"✅ CLAUDE   → {len(result)} candidates")
         return result
     except Exception as e:
-        logger.warning(f"[MultiLLM] Claude error: {e}")
-        return []
-
-
-async def _fetch_openai(count: int, today: str) -> List[Dict]:
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    if not api_key:
-        logger.debug("[MultiLLM] OpenAI: no key — skipping")
-        return []
-    try:
-        import openai
-        client = openai.AsyncOpenAI(api_key=api_key)
-        prompt = UNIVERSE_PROMPT.format(count=count, today=today)
-        resp   = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            max_tokens=2000,
-            temperature=0.3,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        items  = _clean_json(resp.choices[0].message.content or "")
-        result = _normalize(items, "openai")
-        logger.info(f"[MultiLLM] OpenAI: {len(result)} tickers")
-        return result
-    except Exception as e:
-        logger.warning(f"[MultiLLM] OpenAI error: {e}")
+        logger.warning(f"❌ CLAUDE   failed: {e}")
         return []
 
 
 async def _fetch_grok(count: int, today: str) -> List[Dict]:
-    api_key = os.environ.get("GROK_API_KEY", "")
+    # Matches uploaded file: XAI_API_KEY, model grok-2-1212
+    api_key = _get_key("XAI_API_KEY", "GROK_API_KEY")
     if not api_key:
-        logger.debug("[MultiLLM] Grok: no key — skipping")
+        logger.debug("GROK: no XAI_API_KEY — skipping")
         return []
     try:
-        import openai  # Grok uses OpenAI-compatible API
-        client = openai.AsyncOpenAI(
-            api_key=api_key,
-            base_url="https://api.x.ai/v1"
-        )
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
         prompt = UNIVERSE_PROMPT.format(count=count, today=today)
-        resp   = await client.chat.completions.create(
-            model="grok-2-latest",
-            max_tokens=2000,
-            temperature=0.3,
-            messages=[{"role": "user", "content": prompt}]
+        resp = await client.chat.completions.create(
+            model="grok-2-1212",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=3000,
+            temperature=0.7
         )
         items  = _clean_json(resp.choices[0].message.content or "")
         result = _normalize(items, "grok")
-        logger.info(f"[MultiLLM] Grok: {len(result)} tickers")
+        logger.info(f"✅ GROK     → {len(result)} candidates")
         return result
     except Exception as e:
-        logger.warning(f"[MultiLLM] Grok error: {e}")
+        logger.warning(f"❌ GROK     failed: {e}")
+        return []
+
+
+async def _fetch_openai(count: int, today: str) -> List[Dict]:
+    api_key = _get_key("OPENAI_API_KEY")
+    if not api_key:
+        logger.debug("OPENAI: no key — skipping")
+        return []
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=api_key)
+        prompt = UNIVERSE_PROMPT.format(count=count, today=today)
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=3000,
+            temperature=0.7
+        )
+        items  = _clean_json(resp.choices[0].message.content or "")
+        result = _normalize(items, "openai")
+        logger.info(f"✅ OPENAI   → {len(result)} candidates")
+        return result
+    except Exception as e:
+        logger.warning(f"❌ OPENAI   failed: {e}")
         return []
 
 
 async def _fetch_gemini(count: int, today: str) -> List[Dict]:
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    # Matches uploaded file: GOOGLE_API_KEY, model gemini-2.0-flash
+    api_key = _get_key("GOOGLE_API_KEY", "GEMINI_API_KEY")
     if not api_key:
-        logger.debug("[MultiLLM] Gemini: no key — skipping")
+        logger.debug("GEMINI: no GOOGLE_API_KEY — skipping")
         return []
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
-        model  = genai.GenerativeModel("gemini-1.5-flash")
+        model  = genai.GenerativeModel("gemini-2.0-flash")
         prompt = UNIVERSE_PROMPT.format(count=count, today=today)
-        resp   = await asyncio.to_thread(
-            model.generate_content,
-            prompt,
-            generation_config={"max_output_tokens": 2000, "temperature": 0.3}
-        )
+        resp   = await asyncio.to_thread(model.generate_content, prompt)
         items  = _clean_json(resp.text or "")
         result = _normalize(items, "gemini")
-        logger.info(f"[MultiLLM] Gemini: {len(result)} tickers")
+        logger.info(f"✅ GEMINI   → {len(result)} candidates")
         return result
     except Exception as e:
-        logger.warning(f"[MultiLLM] Gemini error: {e}")
+        logger.warning(f"❌ GEMINI   failed: {e}")
         return []
 
 
 # ── Consensus builder ─────────────────────────────────────────────────────────
 
-def _build_consensus(all_results: List[List[Dict]]) -> List[Dict]:
+def _build_consensus(all_results: List[List[Dict]]) -> Dict[str, Any]:
     """
-    Merge results from all providers.
-
-    Ranking:
-      - Tickers mentioned by more providers rank higher (consensus = confidence)
-      - Within same mention count, rank by average confidence score
-      - Provider count stored in 'llm_consensus' field
-
-    Returns deduplicated list sorted by (mention_count DESC, avg_confidence DESC).
+    Merge and rank. Matches the uploaded multi_llm_universe.py structure exactly.
+    Returns both the full ranked list AND the categorized consensus dict.
     """
-    from collections import defaultdict
-    ticker_data: Dict[str, Dict] = {}
-    mention_count: Dict[str, int] = defaultdict(int)
-    confidence_sum: Dict[str, float] = defaultdict(float)
-    sources: Dict[str, List[str]] = defaultdict(list)
+    ticker_sources: Dict[str, Set[str]] = defaultdict(set)
+    all_candidates: List[Dict] = []
 
     for provider_results in all_results:
-        for item in provider_results:
-            t = item["ticker"]
-            mention_count[t] += 1
-            confidence_sum[t] += item["confidence"]
-            sources[t].append(item["source"])
-            if t not in ticker_data:
-                ticker_data[t] = item
+        for c in provider_results:
+            ticker = c["ticker"]
+            ticker_sources[ticker].add(c["source"])
+            all_candidates.append(c)
 
-    # Sort: consensus first, then confidence
-    ranked = sorted(
-        ticker_data.keys(),
-        key=lambda t: (mention_count[t], confidence_sum[t] / mention_count[t]),
-        reverse=True
+    # Categorize by consensus level
+    consensus = {"4_llm": [], "3_llm": [], "2_llm": [], "1_llm": []}
+    for ticker, sources in sorted(ticker_sources.items(),
+                                   key=lambda x: len(x[1]), reverse=True):
+        level = len(sources)
+        cand  = next((c for c in all_candidates if c["ticker"] == ticker), {})
+        cand  = dict(cand)
+        cand["llm_consensus"] = level
+        cand["sources"]       = sorted(sources)
+
+        if   level == 4: consensus["4_llm"].append(cand)
+        elif level == 3: consensus["3_llm"].append(cand)
+        elif level == 2: consensus["2_llm"].append(cand)
+        else:            consensus["1_llm"].append(cand)
+
+    # Flat ranked list (4-LLM first → 1-LLM last)
+    ranked = (
+        consensus["4_llm"] +
+        consensus["3_llm"] +
+        consensus["2_llm"] +
+        consensus["1_llm"]
     )
 
-    result = []
-    for t in ranked:
-        item = dict(ticker_data[t])
-        item["llm_consensus"]   = mention_count[t]
-        item["avg_confidence"]  = round(confidence_sum[t] / mention_count[t], 1)
-        item["sources"]         = sources[t]
-        item["source"]          = f"multi_llm({','.join(sorted(set(sources[t])))})"
-        result.append(item)
-
-    # Log consensus summary
-    consensus_tickers = [t for t in ranked if mention_count[t] > 1]
     logger.info(
-        f"[MultiLLM] Consensus: {len(result)} unique tickers, "
-        f"{len(consensus_tickers)} agreed on by 2+ models: "
-        f"{', '.join(consensus_tickers[:10])}"
+        f"[MultiLLM] Consensus: {len(ticker_sources)} unique | "
+        f"4-LLM: {len(consensus['4_llm'])} | "
+        f"3-LLM: {len(consensus['3_llm'])} | "
+        f"2-LLM: {len(consensus['2_llm'])} | "
+        f"1-LLM: {len(consensus['1_llm'])}"
     )
+
+    return {"ranked": ranked, "consensus": consensus,
+            "total_unique": len(ticker_sources)}
+
+
+# ── Main entry points ─────────────────────────────────────────────────────────
+
+async def build_multi_llm_universe(count_per_llm: int = 25) -> Dict[str, Any]:
+    """
+    Full universe build — matches uploaded multi_llm_universe.py exactly.
+    Queries all 4 providers in parallel and returns consensus dict + saves to DB.
+    """
+    today = date.today().strftime("%B %d, %Y")
+    logger.info(f"🚀 Starting Multi-LLM Universe Build ({count_per_llm} per model)...")
+
+    all_results = await asyncio.gather(
+        _fetch_claude(count_per_llm, today),
+        _fetch_grok(count_per_llm, today),
+        _fetch_openai(count_per_llm, today),
+        _fetch_gemini(count_per_llm, today),
+    )
+
+    valid = [r for r in all_results if isinstance(r, list) and r]
+    if not valid:
+        logger.error("[MultiLLM] All providers failed")
+        return {"status": "failed", "total_unique_tickers": 0}
+
+    merged = _build_consensus(valid)
+
+    # Summary result matching uploaded file format
+    result = {
+        "total_unique_tickers": merged["total_unique"],
+        "consensus": {
+            "4_llm": len(merged["consensus"]["4_llm"]),
+            "3_llm": len(merged["consensus"]["3_llm"]),
+            "2_llm": len(merged["consensus"]["2_llm"]),
+            "1_llm": len(merged["consensus"]["1_llm"]),
+        },
+        "top_4_llm": [c["ticker"] for c in merged["consensus"]["4_llm"][:10]],
+        "top_3_llm": [c["ticker"] for c in merged["consensus"]["3_llm"][:15]],
+        "ranked":    merged["ranked"],
+        "status":    "success",
+    }
+
+    logger.info(f"🎉 Multi-LLM Complete! Total: {result['total_unique_tickers']} | "
+                f"4-LLM: {result['consensus']['4_llm']} | "
+                f"3-LLM: {result['consensus']['3_llm']}")
     return result
 
 
-# ── Main entry point ──────────────────────────────────────────────────────────
-
 async def get_multi_llm_universe(count: int = 30) -> List[Dict]:
-    """
-    Query all configured LLM providers in PARALLEL for squeeze candidates.
-    Returns consensus-ranked list.
-
-    Falls back to Claude-only if no other keys are configured.
-    """
-    today = date.today().strftime("%B %d, %Y")
-    per_model_count = min(count, 25)   # ask each model for up to 25
-
-    providers_configured = sum([
-        bool(os.environ.get("ANTHROPIC_API_KEY")),
-        bool(os.environ.get("OPENAI_API_KEY")),
-        bool(os.environ.get("GROK_API_KEY")),
-        bool(os.environ.get("GEMINI_API_KEY")),
-    ])
-    logger.info(f"[MultiLLM] Querying {providers_configured} LLM provider(s) in parallel...")
-
-    # Run all providers simultaneously
-    all_results = await asyncio.gather(
-        _fetch_anthropic(per_model_count, today),
-        _fetch_openai(per_model_count, today),
-        _fetch_grok(per_model_count, today),
-        _fetch_gemini(per_model_count, today),
-        return_exceptions=False
-    )
-
-    # Filter empty / exception results
-    valid = [r for r in all_results if isinstance(r, list) and r]
-
-    if not valid:
-        logger.error("[MultiLLM] All providers failed — no universe built")
-        return []
-
-    consensus = _build_consensus(valid)
-    # Cap at requested count
-    return consensus[:count]
+    """Simplified entry point — returns flat ranked list for screen pipeline."""
+    result = await build_multi_llm_universe(count_per_llm=min(count, 25))
+    return result.get("ranked", [])[:count]
 
 
 def get_tickers_only(candidates: List[Dict]) -> List[str]:

@@ -46,11 +46,11 @@ if not exist .env (
         echo # OpenAI GPT-4o-mini  →  https://platform.openai.com/api-keys
         echo OPENAI_API_KEY=
         echo.
-        echo # xAI Grok-2          →  https://console.x.ai/
-        echo GROK_API_KEY=
+        echo # xAI Grok-2          →  https://console.x.ai/  (use XAI_API_KEY)
+        echo XAI_API_KEY=
         echo.
-        echo # Google Gemini       →  https://aistudio.google.com/app/apikey
-        echo GEMINI_API_KEY=
+        echo # Google Gemini       →  https://aistudio.google.com/app/apikey  (use GOOGLE_API_KEY)
+        echo GOOGLE_API_KEY=
         echo.
         echo # ── OPTIONAL: Short interest fallback ─────────────────────────────────
         echo # Finnhub free tier (60 req/min)  →  https://finnhub.io/dashboard
