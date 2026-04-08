@@ -84,9 +84,14 @@ def setup_scheduler():
     global scheduler
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
     from apscheduler.triggers.cron import CronTrigger
-    from agents.squeeze.lifecycle_tracker import run_daily_lifecycle_check
-    
+
     scheduler = AsyncIOScheduler(timezone="America/Chicago")
+
+    # AsyncIOScheduler runs in the same event loop as FastAPI.
+    # Pass async functions DIRECTLY — never wrap in lambda/create_task.
+    # APScheduler calls them with await internally.
+
+    from agents.squeeze.lifecycle_tracker import run_daily_lifecycle_check
     scheduler.add_job(
         run_daily_lifecycle_check,
         CronTrigger(hour=8, minute=30),
@@ -104,13 +109,14 @@ def setup_scheduler():
 
     from agents.squeeze.prediction_tracker import daily_outcome_update
     scheduler.add_job(
-        lambda: asyncio.create_task(daily_outcome_update()),
+        daily_outcome_update,           # ← direct reference, NOT lambda/create_task
         CronTrigger(hour=9, minute=0),
         id="daily_outcome_update",
         replace_existing=True
     )
+
     scheduler.start()
-    logger.info("[Scheduler] APScheduler started. Daily lifecycle check at 8:30 AM CT.")
+    logger.info("[Scheduler] APScheduler started. Jobs: 8:30 lifecycle | 8:45 outcomes | 9:00 predictions")
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -280,12 +286,17 @@ def get_multi_llm_universe_endpoint():
     }
 
 
+class UniverseBuildRequest(BaseModel):
+    enabled_providers: Optional[List[str]] = None  # None = all 4
+
+
 @app.post("/api/universe/build")
-async def build_universe():
+async def build_universe(req: UniverseBuildRequest = None):
     """Trigger Multi-LLM universe build — Claude + Grok + OpenAI + Gemini in parallel."""
     from agents.squeeze.multi_llm_client import build_multi_llm_universe
 
-    result = await build_multi_llm_universe(count_per_llm=25)
+    providers = (req.enabled_providers if req and req.enabled_providers else None)
+    result = await build_multi_llm_universe(count_per_llm=25, enabled_providers=providers)
 
     if result.get("status") == "failed":
         raise HTTPException(status_code=500, detail="All LLM providers failed")
@@ -299,12 +310,14 @@ async def build_universe():
         f"3-LLM: {consensus.get('3_llm',0)}"
     )
     return {
-        "added":       result.get("total_unique_tickers", 0),
-        "total_found": result.get("total_unique_tickers", 0),
-        "consensus":   consensus,
-        "message":     result.get("message", ""),
-        "top_4_llm":  result.get("top_4_llm", []),
-        "top_3_llm":  result.get("top_3_llm", []),
+        "added":           result.get("total_unique_tickers", 0),
+        "total_found":     result.get("total_unique_tickers", 0),
+        "consensus":       consensus,
+        "message":         result.get("message", ""),
+        "top_4_llm":       result.get("top_4_llm", []),
+        "top_3_llm":       result.get("top_3_llm", []),
+        "providers_used":  result.get("providers_used", []),
+        "provider_counts": result.get("provider_counts", {}),
     }
 
 
@@ -349,15 +362,39 @@ async def screen_stream(request: Request):
 
             run_id = str(uuid.uuid4())[:8]
 
-            # ── Step 0: Ask Claude for today's top squeeze candidates ──────────
-            universe_count = int(settings.get("universe_size", 30))
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'universe', 'message': f'Asking Claude to identify top {universe_count} short squeeze candidates for today...'})}\n\n"
+            # ── Step 0: Ask Multi-LLM for today's squeeze candidates ─────────
+            universe_count     = int(settings.get("universe_size", 30))
+            enabled_providers  = settings.get("enabled_providers", None)  # None = all 4
 
-            claude_candidates = await get_claude_universe(count=universe_count)
-            claude_tickers    = get_tickers_only(claude_candidates)
+            from agents.squeeze.multi_llm_client import (
+                build_multi_llm_universe, get_tickers_only as _mlm_tickers_only
+            )
 
-            # Store Claude's context so thesis generation can reference it
-            settings["_claude_candidates"] = {c["ticker"]: c for c in claude_candidates}
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'universe', 'pct': 5, 'message': f'Asking LLMs to identify top {universe_count} short squeeze candidates...'})}\n\n"
+
+            screen_start_time = datetime.utcnow()
+            universe_result = await build_multi_llm_universe(
+                count_per_llm=min(universe_count, 25),
+                enabled_providers=enabled_providers
+            )
+
+            ranked_candidates  = universe_result.get("ranked_tickers", [])
+            all_tickers        = _mlm_tickers_only(ranked_candidates)
+            provider_counts    = universe_result.get("provider_counts", {})
+            providers_used     = universe_result.get("providers_used", [])
+            consensus_counts   = universe_result.get("consensus", {})
+
+            # Store full candidate context for thesis generation
+            settings["_claude_candidates"] = {c["ticker"]: c for c in ranked_candidates}
+
+            # Build per-LLM display string: "Claude-25, Grok-24, OpenAI-22, Gemini-25"
+            llm_counts_str = ", ".join(
+                f"{p.capitalize()}-{provider_counts.get(p,0)}"
+                for p in providers_used
+            )
+            total_identified = len(all_tickers)
+
+            yield f"data: {json.dumps({'type': 'llm_counts', 'provider_counts': provider_counts, 'providers_used': providers_used, 'consensus': consensus_counts, 'total': total_identified, 'llm_counts_str': llm_counts_str})}\n\n"
 
             # Merge with any manually pinned tickers from the universe DB
             conn = get_db()
@@ -366,7 +403,7 @@ async def screen_stream(request: Request):
             pinned = [r[0] for r in c_db.fetchall()]
             conn.close()
 
-            tickers = claude_tickers.copy()
+            tickers = all_tickers.copy()
             for t in pinned:
                 if t not in tickers:
                     tickers.append(t)
@@ -375,14 +412,20 @@ async def screen_stream(request: Request):
                 from agents.squeeze.universe_builder import SEED_TICKERS
                 tickers = SEED_TICKERS
 
-            logger.info(f"[Screen] Universe: {len(claude_tickers)} from Claude + {len(pinned)} pinned = {len(tickers)} total")
+            total_tickers = len(tickers)
+            logger.info(f"[Screen] Universe: {len(all_tickers)} from LLMs + {len(pinned)} pinned = {total_tickers} total")
 
-            yield f"data: {json.dumps({'type': 'start', 'run_id': run_id, 'ticker_count': len(tickers), 'claude_universe': claude_tickers[:10]})}\n\n"
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'screen', 'message': f'Claude identified {len(claude_tickers)} candidates. Validating live data for each...'})}\n\n"
-            
+            # Estimate: ~45s/ticker average (Yahoo 2s + Massive fallback + enrichment)
+            avg_sec_per_ticker = 45
+            est_total_sec      = total_tickers * avg_sec_per_ticker
+            est_finish_utc     = screen_start_time + __import__('datetime').timedelta(seconds=est_total_sec)
+
+            yield f"data: {json.dumps({'type': 'start', 'run_id': run_id, 'ticker_count': total_tickers, 'llm_counts_str': llm_counts_str, 'start_time': screen_start_time.strftime('%H:%M:%S UTC'), 'est_finish': est_finish_utc.strftime('%H:%M:%S UTC'), 'est_total_min': round(est_total_sec/60,1)})}\n\n"
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'screen', 'pct': 15, 'message': f'LLMs identified {total_tickers} tickers. Validating live data...', 'processing': f'Processing 0/{total_tickers}', 'avg_sec': avg_sec_per_ticker, 'start_time': screen_start_time.strftime('%H:%M:%S UTC'), 'est_finish': est_finish_utc.strftime('%H:%M:%S UTC')})}\n\n"
+
             result = await run_screener_pipeline(run_id, tickers, settings)
-            
-            yield f"data: {json.dumps({'type': 'progress', 'stage': 'enrich', 'message': 'Enriching candidates...'})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'progress', 'stage': 'enrich', 'pct': 75, 'message': 'Enriching candidates with news + SEC data...'})}\n\n"
             
             # ── Save results to DB + compute delta stats ──────────────────────────
             conn = get_db()
@@ -1021,7 +1064,6 @@ async def refresh_ticker_si(ticker: str):
     """
     from agents.squeeze.yahoo_quote import YahooQuoteSession
     from agents.squeeze.massive_client import get_price_and_volume
-    import os
 
     ticker = ticker.upper().strip()
 
@@ -1262,6 +1304,420 @@ async def move_ticker_to_squeeze(ticker: str):
         logger.error(f"[Consensus] Move failed for {ticker}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CHECK PRICES — bulk price refresh for all tickers in DB
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/prices/check/stream")
+async def check_prices_stream(request: Request):
+    """
+    SSE endpoint: fetches latest prices from Yahoo then Massive for all
+    tickers in squeeze_results. Overwrites price in DB. Streams progress.
+    """
+    from agents.squeeze.yahoo_quote import YahooQuoteSession
+    from agents.squeeze.massive_client import get_price_and_volume
+
+    async def price_generator():
+        try:
+            conn = get_db()
+            c    = conn.cursor()
+            c.execute("SELECT DISTINCT ticker FROM squeeze_results ORDER BY ticker")
+            tickers = [r[0] for r in c.fetchall()]
+            conn.close()
+
+            if not tickers:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'No tickers in DB'})}\n\n"
+                return
+
+            total   = len(tickers)
+            session = YahooQuoteSession(delay=1.5)
+            updated = 0
+            failed  = 0
+
+            yield f"data: {json.dumps({'type': 'start', 'total': total})}\n\n"
+
+            for idx, ticker in enumerate(tickers, 1):
+                if await request.is_disconnected():
+                    break
+
+                price  = 0
+                source = "none"
+
+                # Try Yahoo first
+                try:
+                    quote = await asyncio.to_thread(session.get_quote, ticker)
+                    if quote and quote.get("price", 0) > 0:
+                        price  = quote["price"]
+                        source = "yahoo"
+                except Exception:
+                    pass
+
+                # Fallback to Massive
+                if price == 0:
+                    try:
+                        snap = await asyncio.to_thread(get_price_and_volume, ticker)
+                        if snap and snap.get("price", 0) > 0:
+                            price  = snap["price"]
+                            source = "massive"
+                    except Exception:
+                        pass
+
+                if price > 0:
+                    conn = get_db()
+                    cc   = conn.cursor()
+                    cc.execute("""
+                        UPDATE squeeze_results SET price = ?
+                        WHERE ticker = ?
+                        AND run_id = (
+                            SELECT run_id FROM squeeze_results
+                            WHERE ticker=? ORDER BY screened_at DESC LIMIT 1
+                        )
+                    """, (price, ticker, ticker))
+                    cc.execute("""
+                        UPDATE squeeze_lifecycle SET current_price = ?
+                        WHERE ticker = ?
+                        AND snapshot_date = (
+                            SELECT MAX(snapshot_date) FROM squeeze_lifecycle WHERE ticker=?
+                        )
+                    """, (price, ticker, ticker))
+                    conn.commit()
+                    conn.close()
+                    updated += 1
+                    logger.info(f"[CheckPrices] {ticker}: ${price:.2f} ({source})")
+                else:
+                    failed += 1
+                    logger.warning(f"[CheckPrices] {ticker}: no price found")
+
+                pct = round(idx / total * 100)
+                yield f"data: {json.dumps({'type': 'tick', 'ticker': ticker, 'price': price, 'source': source, 'idx': idx, 'total': total, 'pct': pct})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done', 'total': total, 'updated': updated, 'failed': failed})}\n\n"
+
+        except Exception as e:
+            logger.error(f"[CheckPrices] Stream error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        price_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LLM PRICE / SI CONSENSUS — ask LLMs for prices and compare
+# ─────────────────────────────────────────────────────────────────────────────
+
+class LLMConsensusRequest(BaseModel):
+    tickers: Optional[List[str]] = None
+    enabled_providers: Optional[List[str]] = None
+
+
+@app.get("/api/prices/llm_consensus/stream")
+async def llm_price_consensus_stream(request: Request, providers: str = ""):
+    """
+    SSE streaming version of LLM price/SI consensus.
+    Processes tickers in batches of 5, streams progress after each batch.
+    Shows per-LLM values and consensus result for each ticker live.
+    """
+    from agents.squeeze.multi_llm_client import get_llm_price_si_consensus
+
+    async def consensus_generator():
+        try:
+            enabled = [p.strip() for p in providers.split(",") if p.strip()] or None
+
+            conn = get_db()
+            c    = conn.cursor()
+            c.execute("SELECT DISTINCT ticker FROM squeeze_results ORDER BY ticker")
+            tickers = [r[0] for r in c.fetchall()]
+            conn.close()
+
+            if not tickers:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'No tickers in DB'})}\n\n"
+                return
+
+            total         = len(tickers)
+            batch_size    = 5
+            start_time    = datetime.utcnow()
+            run_id        = str(uuid.uuid4())[:8]
+            updated_price = 0
+            updated_si    = 0
+            processed     = 0
+            all_tick_rows = []   # accumulate for final summary table
+
+            avg_sec_per_ticker = 8
+            est_total_sec      = total * avg_sec_per_ticker
+            est_finish         = start_time + __import__('datetime').timedelta(seconds=est_total_sec)
+
+            yield f"data: {json.dumps({'type': 'start', 'total': total, 'run_id': run_id, 'batch_size': batch_size, 'start_time': start_time.strftime('%H:%M:%S UTC'), 'est_finish': est_finish.strftime('%H:%M:%S UTC'), 'est_total_min': round(est_total_sec/60,1)})}\n\n"
+
+            for batch_start in range(0, total, batch_size):
+                if await request.is_disconnected():
+                    break
+
+                batch = tickers[batch_start:batch_start + batch_size]
+
+                # Log what we're about to ask
+                logger.info(f"[LLMConsensus] Batch {batch_start//batch_size+1}: asking LLMs for {batch}")
+
+                consensus_data = await get_llm_price_si_consensus(batch, enabled_providers=enabled)
+
+                # Log raw returns for every ticker in this batch
+                for t in batch:
+                    d = consensus_data.get(t, {})
+                    logger.info(
+                        f"[LLMConsensus] RAW {t}: "
+                        f"prices={d.get('all_prices',{})} "
+                        f"si={d.get('all_si',{})} "
+                        f"dtc={d.get('all_dtc',{})} "
+                        f"price_consensus={d.get('price_consensus',False)} "
+                        f"si_consensus={d.get('si_consensus',False)}"
+                    )
+
+                conn = get_db()
+                cc   = conn.cursor()
+
+                for ticker in batch:
+                    data = consensus_data.get(ticker, {})
+                    processed += 1
+
+                    price_ok = data.get("price_consensus") and data.get("price", 0) > 0
+                    si_ok    = data.get("si_consensus")    and data.get("short_float", 0) > 0
+                    all_prices = data.get("all_prices", {})
+                    all_si     = data.get("all_si", {})
+                    all_dtc    = data.get("all_dtc", {})
+                    note = data.get("price_consensus_note") or data.get("si_consensus_note") or ""
+
+                    # ── Save raw LLM values to llm_price_runs table (always) ──
+                    # One row per LLM that returned data for this ticker
+                    all_llm_names = set(list(all_prices.keys()) + list(all_si.keys()))
+                    if not all_llm_names:
+                        # No LLM returned anything — save a "no data" row
+                        try:
+                            cc.execute("""
+                                INSERT INTO llm_price_runs
+                                (run_id, ticker, llm_name, price, short_float, days_to_cover,
+                                 price_consensus, si_consensus, consensus_note)
+                                VALUES (?,?,?,?,?,?,?,?,?)
+                            """, (run_id, ticker, "none", 0, 0, 0, 0, 0, "No LLM returned data"))
+                        except Exception:
+                            pass
+                    else:
+                        for llm_name in all_llm_names:
+                            try:
+                                cc.execute("""
+                                    INSERT INTO llm_price_runs
+                                    (run_id, ticker, llm_name, price, short_float, days_to_cover,
+                                     price_consensus, si_consensus, consensus_note)
+                                    VALUES (?,?,?,?,?,?,?,?,?)
+                                """, (
+                                    run_id, ticker, llm_name,
+                                    all_prices.get(llm_name, 0),
+                                    all_si.get(llm_name, 0),
+                                    all_dtc.get(llm_name, 0),
+                                    int(price_ok), int(si_ok),
+                                    note or ""
+                                ))
+                            except Exception:
+                                pass
+
+                    # ── Update squeeze_results if consensus reached ──
+                    if price_ok:
+                        cc.execute("""
+                            UPDATE squeeze_results SET price = ?, price_consensus_note = ?
+                            WHERE ticker = ?
+                            AND run_id = (SELECT run_id FROM squeeze_results WHERE ticker=? ORDER BY screened_at DESC LIMIT 1)
+                        """, (data["price"], data["price_consensus_note"], ticker, ticker))
+                        cc.execute("""
+                            UPDATE squeeze_lifecycle SET current_price = ?
+                            WHERE ticker = ?
+                            AND snapshot_date = (SELECT MAX(snapshot_date) FROM squeeze_lifecycle WHERE ticker=?)
+                        """, (data["price"], ticker, ticker))
+                        updated_price += 1
+
+                    if si_ok:
+                        cc.execute("""
+                            UPDATE squeeze_results SET short_float = ?, days_to_cover = ?, si_consensus_note = ?
+                            WHERE ticker = ?
+                            AND run_id = (SELECT run_id FROM squeeze_results WHERE ticker=? ORDER BY screened_at DESC LIMIT 1)
+                        """, (data["short_float"], data["days_to_cover"], note, ticker, ticker))
+                        updated_si += 1
+
+                    # Build tick row for live table
+                    tick_row = {
+                        "ticker":      ticker,
+                        "claude":      all_prices.get("claude", "—"),
+                        "grok":        all_prices.get("grok", "—"),
+                        "openai":      all_prices.get("openai", "—"),
+                        "gemini":      all_prices.get("gemini", "—"),
+                        "si_claude":   all_si.get("claude", "—"),
+                        "si_grok":     all_si.get("grok", "—"),
+                        "si_openai":   all_si.get("openai", "—"),
+                        "si_gemini":   all_si.get("gemini", "—"),
+                        "price_ok":    price_ok,
+                        "si_ok":       si_ok,
+                        "note":        note or ("✓ Consensus" if (price_ok or si_ok) else "No consensus"),
+                    }
+                    all_tick_rows.append(tick_row)
+
+                    elapsed_sec = (datetime.utcnow() - start_time).total_seconds()
+                    avg_actual  = round(elapsed_sec / processed, 1) if processed > 0 else avg_sec_per_ticker
+                    rem_sec     = avg_actual * (total - processed)
+                    eta_str     = (datetime.utcnow() + __import__('datetime').timedelta(seconds=rem_sec)).strftime('%H:%M:%S UTC')
+                    pct         = round(processed / total * 100)
+
+                    yield f"data: {json.dumps({'type': 'tick', 'ticker': ticker, 'idx': processed, 'total': total, 'pct': pct, 'price': data.get('price', 0), 'short_float': data.get('short_float', 0), 'price_ok': price_ok, 'si_ok': si_ok, 'all_prices': all_prices, 'all_si': all_si, 'note': tick_row['note'], 'updated_price': updated_price, 'updated_si': updated_si, 'avg_sec': avg_actual, 'eta': eta_str, 'row': tick_row})}\n\n"
+
+                conn.commit()
+                conn.close()
+
+            yield f"data: {json.dumps({'type': 'done', 'total': total, 'updated_price': updated_price, 'updated_si': updated_si, 'run_id': run_id, 'rows': all_tick_rows})}\n\n"
+            logger.info(f"[LLMConsensus] Run {run_id} complete — {updated_price} prices, {updated_si} SI updated across {total} tickers")
+
+        except Exception as e:
+            logger.error(f"[LLMConsensus] Stream error: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        consensus_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
+
+
+@app.post("/api/prices/llm_consensus")
+async def llm_price_consensus(req: LLMConsensusRequest = None):
+    """Non-streaming fallback — kept for API compatibility."""
+    from agents.squeeze.multi_llm_client import get_llm_price_si_consensus
+
+    tickers   = req.tickers if req and req.tickers else None
+    providers = req.enabled_providers if req and req.enabled_providers else None
+
+    if not tickers:
+        conn = get_db()
+        c    = conn.cursor()
+        c.execute("SELECT DISTINCT ticker FROM squeeze_results ORDER BY ticker")
+        tickers = [r[0] for r in c.fetchall()]
+        conn.close()
+
+    if not tickers:
+        return {"status": "no_tickers", "results": []}
+
+    consensus_data = await get_llm_price_si_consensus(tickers, enabled_providers=providers)
+
+    conn = get_db()
+    c    = conn.cursor()
+    updated_price = 0
+    updated_si    = 0
+
+    for ticker, data in consensus_data.items():
+        if data.get("price_consensus") and data.get("price", 0) > 0:
+            c.execute("""
+                UPDATE squeeze_results SET price = ?, price_consensus_note = ?
+                WHERE ticker = ?
+                AND run_id = (SELECT run_id FROM squeeze_results WHERE ticker=? ORDER BY screened_at DESC LIMIT 1)
+            """, (data["price"], data["price_consensus_note"], ticker, ticker))
+            c.execute("""
+                UPDATE squeeze_lifecycle SET current_price = ?
+                WHERE ticker = ?
+                AND snapshot_date = (SELECT MAX(snapshot_date) FROM squeeze_lifecycle WHERE ticker=?)
+            """, (data["price"], ticker, ticker))
+            updated_price += 1
+
+        if data.get("si_consensus") and data.get("short_float", 0) > 0:
+            c.execute("""
+                UPDATE squeeze_results SET short_float = ?, days_to_cover = ?, si_consensus_note = ?
+                WHERE ticker = ?
+                AND run_id = (SELECT run_id FROM squeeze_results WHERE ticker=? ORDER BY screened_at DESC LIMIT 1)
+            """, (data["short_float"], data["days_to_cover"], data["si_consensus_note"], ticker, ticker))
+            updated_si += 1
+
+    conn.commit()
+    conn.close()
+
+    return {"status": "ok", "tickers_checked": len(tickers), "updated_price": updated_price, "updated_si": updated_si}
+
+
+
+
+@app.get("/api/llm_price_runs")
+def get_llm_price_runs(run_id: str = None, limit: int = 200):
+    """
+    Return raw LLM price/SI values from llm_price_runs table.
+    If run_id supplied, return that run. Otherwise return latest run.
+    Returns pivoted rows: one row per ticker with columns per LLM.
+    """
+    conn = get_db()
+    c    = conn.cursor()
+
+    # Get the target run_id
+    if not run_id:
+        row = c.execute(
+            "SELECT run_id, MAX(run_at) FROM llm_price_runs"
+        ).fetchone()
+        run_id = row[0] if row and row[0] else None
+
+    if not run_id:
+        conn.close()
+        return {"run_id": None, "run_at": None, "rows": [], "available_runs": []}
+
+    # All rows for this run
+    c.execute("""
+        SELECT ticker, llm_name, price, short_float, days_to_cover,
+               price_consensus, si_consensus, consensus_note, run_at
+        FROM llm_price_runs
+        WHERE run_id = ?
+        ORDER BY ticker, llm_name
+    """, (run_id,))
+    raw = c.fetchall()
+
+    # Get run_at from first row
+    run_at = raw[0][8] if raw else None
+
+    # Available run IDs for dropdown
+    c.execute("""
+        SELECT DISTINCT run_id, MAX(run_at) as ra
+        FROM llm_price_runs
+        GROUP BY run_id
+        ORDER BY ra DESC
+        LIMIT 20
+    """)
+    available_runs = [{"run_id": r[0], "run_at": r[1]} for r in c.fetchall()]
+    conn.close()
+
+    # Pivot: one row per ticker
+    from collections import defaultdict
+    pivot = defaultdict(lambda: {
+        "ticker": "", "price_consensus": False, "si_consensus": False, "consensus_note": "",
+        "claude_price": None, "grok_price": None, "openai_price": None, "gemini_price": None,
+        "claude_si": None, "grok_si": None, "openai_si": None, "gemini_si": None,
+        "claude_dtc": None, "grok_dtc": None, "openai_dtc": None, "gemini_dtc": None,
+    })
+
+    for ticker, llm, price, si, dtc, p_ok, s_ok, note, _ in raw:
+        d = pivot[ticker]
+        d["ticker"] = ticker
+        if p_ok: d["price_consensus"] = True
+        if s_ok: d["si_consensus"]    = True
+        if note: d["consensus_note"]  = note
+        llm = (llm or "").lower()
+        if llm in ("claude","grok","openai","gemini"):
+            d[f"{llm}_price"] = round(price, 2) if price else None
+            d[f"{llm}_si"]    = round(si, 1)    if si    else None
+            d[f"{llm}_dtc"]   = round(dtc, 1)   if dtc   else None
+
+    rows = sorted(pivot.values(), key=lambda x: x["ticker"])
+
+    return {
+        "run_id":         run_id,
+        "run_at":         run_at,
+        "rows":           rows,
+        "total":          len(rows),
+        "available_runs": available_runs,
+    }
 
 @app.get("/api/health")
 def health():

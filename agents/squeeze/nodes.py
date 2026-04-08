@@ -26,6 +26,12 @@ from .memory import format_history_for_context, save_thesis_to_history
 from .massive_client import get_price_and_volume, get_ticker_details
 from .yahoo_quote import YahooQuoteSession
 from .finnhub_client import get_short_interest as _fh_get_si  # used only if FINNHUB_API_KEY set
+from .financial_datasets_client import (
+    get_current_price as _fd_get_price,
+    get_fundamentals_summary as _fd_get_fundamentals,
+    format_fundamentals_for_thesis as _fd_format_fundamentals,
+    get_company_news as _fd_get_news,
+)
 # from .marketbeat_client import get_short_interest as _mb_get_si  # MarketBeat (403ing — disabled)
 from .learning_engine import (
     format_calibration_for_prompt, query_episode_memory
@@ -129,9 +135,18 @@ async def _screen_one_ticker(ticker: str, settings: Dict, run_id: str) -> Option
             data_source  = data_source + "+massive" if data_source != "none" else "massive"
             logger.debug(f"[Screen] {ticker}: Massive aggs OK — ${price:.2f}")
 
+    if price == 0:
+        # ── Priority 3b: Financial Datasets price snapshot (fallback) ─────────
+        if os.environ.get("FINANCIAL_DATASETS_API_KEY"):
+            logger.debug(f"[Screen] {ticker}: no price yet, trying Financial Datasets...")
+            fd_price = await asyncio.to_thread(_fd_get_price, ticker)
+            if fd_price and fd_price.get("price", 0) > 0:
+                price       = fd_price["price"]
+                data_source = data_source + "+fd_price" if data_source != "none" else "fd_price"
+                logger.debug(f"[Screen] {ticker}: Financial Datasets price OK — ${price:.2f}")
+
     if short_float == 0:
         # ── Priority 4: Finnhub SI (if key is configured) ─────────────────────
-        import os
         if os.environ.get("FINNHUB_API_KEY"):
             logger.debug(f"[Screen] {ticker}: trying Finnhub for SI data...")
             si_data = await asyncio.to_thread(_fh_get_si, ticker)
@@ -324,16 +339,42 @@ async def enrich_ticker(ticker: str, run_id: str) -> Dict[str, Any]:
     news_chunks   = query_news(ticker,    f"{ticker} short squeeze catalyst", n_results=5)
     filing_chunks = query_filings(ticker, f"{ticker} material events",        n_results=3)
 
+    # ── Financial Datasets fundamentals enrichment (if key configured) ────────
+    fd_fundamentals     = None
+    fd_fundamentals_str = ""
+    fd_news             = []
+    if os.environ.get("FINANCIAL_DATASETS_API_KEY"):
+        try:
+            fd_fundamentals = await asyncio.to_thread(_fd_get_fundamentals, ticker)
+            if fd_fundamentals:
+                fd_fundamentals_str = _fd_format_fundamentals(fd_fundamentals)
+                logger.info(f"[Enrich] {ticker}: FD fundamentals OK")
+        except Exception as e:
+            logger.debug(f"[Enrich] {ticker}: FD fundamentals error: {e}")
+        try:
+            fd_news_raw = await asyncio.to_thread(_fd_get_news, ticker, 8)
+            if fd_news_raw:
+                fd_news = [
+                    f"{a.get('published_date','')[:10]} — {a.get('title','')}"
+                    for a in fd_news_raw if a.get("title")
+                ]
+                logger.info(f"[Enrich] {ticker}: FD news {len(fd_news)} articles")
+        except Exception as e:
+            logger.debug(f"[Enrich] {ticker}: FD news error: {e}")
+
     return {
         ticker: {
-            "news_context":  research.get("news_context", ""),
-            "sec_context":   research.get("sec_context", ""),
-            "agent_summary": research.get("agent_summary", ""),
-            "news_chunks":   news_chunks,
-            "filing_chunks": filing_chunks,
-            "_ts_agent":     ts_agent,
-            "_ts_rag":       ts_rag,
-            "_ts_chroma":    ts_chroma,
+            "news_context":       research.get("news_context", ""),
+            "sec_context":        research.get("sec_context", ""),
+            "agent_summary":      research.get("agent_summary", ""),
+            "news_chunks":        news_chunks,
+            "filing_chunks":      filing_chunks,
+            "fd_fundamentals":    fd_fundamentals,
+            "fd_fundamentals_str": fd_fundamentals_str,
+            "fd_news":            fd_news,
+            "_ts_agent":          ts_agent,
+            "_ts_rag":            ts_rag,
+            "_ts_chroma":         ts_chroma,
         }
     }
 
@@ -401,11 +442,21 @@ async def generate_ticker_thesis(
 
     # Build adaptive context from all learning layers
     from .learning_engine import get_latest_lessons
-    lessons          = get_latest_lessons()
+    lessons           = get_latest_lessons()
     lifecycle_context = format_history_for_context(ticker)
+
+    # Financial Datasets fundamentals + news (from enrich stage)
+    fd_fundamentals_str = enrich.get("fd_fundamentals_str", "")
+    fd_news             = enrich.get("fd_news", [])
+    fd_news_block = ""
+    if fd_news:
+        fd_news_block = "FINANCIAL DATASETS NEWS — " + ticker + ":\n" + "\n".join(f"  \u2022 {h}" for h in fd_news[:8])
+
     adaptive_context = "\n\n".join(filter(None, [
         claude_universe_context,
         calibration_context,
+        fd_fundamentals_str,
+        fd_news_block,
         f"PRIOR EPISODES FOR {ticker}:\n{prior_episodes}" if prior_episodes != "No prior prediction history." else "",
         f"LESSONS LEARNED:\n{lessons}" if lessons else "",
         f"LIFECYCLE HISTORY:\n{lifecycle_context}" if lifecycle_context else ""

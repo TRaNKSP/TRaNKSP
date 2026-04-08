@@ -26,8 +26,9 @@ anthropic>=0.41.0,<1
 # OpenAI GPT-4o-mini (optional — set OPENAI_API_KEY in .env)
 openai>=1.30.0,<2
 
-# Google Gemini (optional — set GEMINI_API_KEY in .env)
-google-generativeai>=0.7.0,<1
+# Google Gemini (optional — set GOOGLE_API_KEY in .env)
+# Uses new google-genai SDK — fixes gemini-2.5-flash hang bug in old SDK
+google-genai>=1.0.0
 
 # Note: xAI Grok uses the openai package with a custom base_url (no extra install needed)
 
@@ -36,6 +37,11 @@ tavily-python==0.5.0
 
 # ── Market data (Massive.com / Polygon.io — official API) ─────────────────────
 polygon-api-client>=1.12.0
+
+# ── Financial Datasets API (fundamentals enrichment — optional) ───────────────
+# No extra package needed — uses httpx (already listed below).
+# Set FINANCIAL_DATASETS_API_KEY in .env to enable.
+# Docs: https://docs.financialdatasets.ai
 
 # ── Data / utilities ───────────────────────────────────────────────────────────
 pandas>=1.5.0,<3

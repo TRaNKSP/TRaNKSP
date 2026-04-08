@@ -701,9 +701,38 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
     <button class="btn btn-ghost" id="btnRefreshAll" onclick="refreshAllCards()" title="Re-fetch SI data for all visible cards from Yahoo">
       ↻ Refresh SI
     </button>
+    <button class="btn btn-ghost" id="btnCheckPrices" onclick="checkPrices()" title="Fetch latest prices from Yahoo/Massive for all DB tickers">
+      💲 Check Prices
+    </button>
+    <button class="btn btn-ghost" id="btnLLMConsensus" onclick="runLLMConsensus()" title="Ask LLMs for price+SI estimates and apply consensus values">
+      🤖 LLM Price Check
+    </button>
+    <button class="btn btn-ghost btn-sm" id="btnLLMSelect" onclick="toggleLLMSelector()" title="Choose which LLMs to use">
+      ⚙ LLMs
+    </button>
     <button class="btn btn-primary" id="btnRunScreen">
       <span id="screenBtnText">▶ Run Screen</span>
     </button>
+  </div>
+
+  <!-- LLM Selector Panel -->
+  <div id="llmSelectorPanel" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;margin-bottom:12px">
+    <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Select LLMs to use for this run</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="llm_claude" checked onchange="updateLLMSelection()"> Claude
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="llm_grok" checked onchange="updateLLMSelection()"> Grok
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="llm_openai" checked onchange="updateLLMSelection()"> OpenAI
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" id="llm_gemini" checked onchange="updateLLMSelection()"> Gemini
+      </label>
+      <span id="llmSelectionNote" style="font-size:11px;color:var(--text3);font-family:var(--font-mono)">All 4 LLMs active</span>
+    </div>
   </div>
 
   <!-- Run Stats Banner -->
@@ -771,9 +800,100 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
     <div class="scan-stage" id="scanStage">Initializing...</div>
     <div class="progress-bar"><div class="progress-fill" id="scanProgress" style="width:0%"></div></div>
     <div class="scan-info" id="scanInfo">—</div>
+
+    <!-- Enhanced status panel — shown during screen run -->
+    <div id="statusDetailPanel" style="display:none;margin-top:12px;padding:12px 16px;background:var(--surface2,#0d1117);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:11px;line-height:1.9">
+      <!-- LLM identification row -->
+      <div id="statusLLMRow" style="color:var(--text2)">
+        <span style="color:var(--text3)">IDENTIFIED BY:</span> <span id="statusLLMCounts">—</span>
+      </div>
+      <!-- Processing progress -->
+      <div id="statusProcessRow" style="color:var(--text2)">
+        <span style="color:var(--text3)">PROCESSING:</span>
+        <span id="statusProcessIdx">0</span>/<span id="statusProcessTotal">—</span>
+        &nbsp;·&nbsp;
+        <span style="color:var(--text3)">AVG TIME/TICKER:</span> <span id="statusAvgTime">~45s</span>
+        &nbsp;·&nbsp;
+        <span style="color:var(--text3)">ETA TO FINISH:</span> <span id="statusETA">—</span>
+      </div>
+      <!-- Timing row -->
+      <div id="statusTimeRow" style="color:var(--text2)">
+        <span style="color:var(--text3)">STARTED:</span> <span id="statusStartTime">—</span>
+        &nbsp;·&nbsp;
+        <span style="color:var(--text3)">EST END:</span> <span id="statusEstEnd">—</span>
+      </div>
+      <!-- Consensus breakdown -->
+      <div id="statusConsensusRow" style="color:var(--text2)">
+        <span style="color:var(--text3)">CONSENSUS:</span>
+        <span id="statusConsensus4" style="color:#ff6b35">🔥 4-LLM: 0</span>
+        &nbsp;
+        <span id="statusConsensus3" style="color:#ffd700">⭐ 3-LLM: 0</span>
+        &nbsp;
+        <span id="statusConsensus2" style="color:#00e5ff">💎 2-LLM: 0</span>
+        &nbsp;
+        <span id="statusConsensus1" style="color:var(--text3)">⚪ 1-LLM: 0</span>
+      </div>
+    </div>
+
+    <!-- Check Prices status panel -->
+    <div id="checkPricesPanel" style="display:none;margin-top:12px;padding:12px 16px;background:var(--surface2,#0d1117);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font-mono);font-size:11px;line-height:1.9">
+      <div style="color:var(--accent);margin-bottom:6px">💲 CHECKING PRICES...</div>
+      <div style="color:var(--text2)">
+        <span style="color:var(--text3)">TICKER:</span> <span id="cpCurrentTicker">—</span>
+        &nbsp;·&nbsp;
+        <span style="color:var(--text3)">PROGRESS:</span> <span id="cpIdx">0</span>/<span id="cpTotal">—</span>
+        &nbsp;·&nbsp;
+        <span style="color:var(--text3)">PRICE:</span> <span id="cpPrice">—</span>
+        &nbsp;·&nbsp;
+        <span style="color:var(--text3)">SOURCE:</span> <span id="cpSource">—</span>
+      </div>
+      <div class="progress-bar" style="margin-top:8px"><div class="progress-fill" id="cpProgress" style="width:0%"></div></div>
+    </div>
   </div>
 
-  <!-- Results Grid -->
+  <!-- LLM Price Runs Table -->
+  <div id="llmPriceRunsPanel" style="display:none;margin-bottom:20px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-weight:700;font-size:14px">🤖 LLM Price & SI Raw Values</div>
+          <div style="font-size:11px;font-family:var(--font-mono);color:var(--text3);margin-top:2px" id="llmRunMeta">—</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <select id="llmRunSelect" onchange="loadLLMPriceRun(this.value)"
+            style="background:var(--surface2,#0d1117);border:1px solid var(--border);color:var(--text1);padding:4px 8px;border-radius:4px;font-size:11px;font-family:var(--font-mono)">
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadLLMPriceRun()">↻ Refresh</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('llmPriceRunsPanel').style.display='none'">✕ Close</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:var(--font-mono)">
+          <thead>
+            <tr style="background:var(--surface2,#0d1117)">
+              <th style="padding:8px 12px;text-align:left;color:var(--text3);text-transform:uppercase;font-size:10px;border-bottom:1px solid var(--border)">Ticker</th>
+              <th style="padding:8px 12px;text-align:right;color:#7ee8fa;font-size:10px;border-bottom:1px solid var(--border)">Claude $</th>
+              <th style="padding:8px 12px;text-align:right;color:#f59e0b;font-size:10px;border-bottom:1px solid var(--border)">Grok $</th>
+              <th style="padding:8px 12px;text-align:right;color:#a78bfa;font-size:10px;border-bottom:1px solid var(--border)">OpenAI $</th>
+              <th style="padding:8px 12px;text-align:right;color:#34d399;font-size:10px;border-bottom:1px solid var(--border)">Gemini $</th>
+              <th style="padding:8px 12px;text-align:right;color:#7ee8fa;font-size:10px;border-bottom:1px solid var(--border)">Claude SI%</th>
+              <th style="padding:8px 12px;text-align:right;color:#f59e0b;font-size:10px;border-bottom:1px solid var(--border)">Grok SI%</th>
+              <th style="padding:8px 12px;text-align:right;color:#a78bfa;font-size:10px;border-bottom:1px solid var(--border)">OpenAI SI%</th>
+              <th style="padding:8px 12px;text-align:right;color:#34d399;font-size:10px;border-bottom:1px solid var(--border)">Gemini SI%</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;border-bottom:1px solid var(--border);color:var(--text3)">Price ✓</th>
+              <th style="padding:8px 12px;text-align:center;font-size:10px;border-bottom:1px solid var(--border);color:var(--text3)">SI ✓</th>
+              <th style="padding:8px 12px;text-align:left;font-size:10px;border-bottom:1px solid var(--border);color:var(--text3)">Note</th>
+            </tr>
+          </thead>
+          <tbody id="llmRunTableBody">
+            <tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text3)">Run LLM Price Check to see results</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+    <!-- Results Grid -->
   <div class="grid-3" id="squeezeGrid">
     <div class="empty-state" style="grid-column:1/-1">
       <div class="empty-state-icon">🎯</div>
@@ -1854,15 +1974,241 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 // ═══════════════════════════════════════════════════════
 // SHORT SQUEEZE TAB
 // ═══════════════════════════════════════════════════════
-async function runScreen() {
-  const btn = document.getElementById('btnRunScreen');
-  const btnText = document.getElementById('screenBtnText');
+// ── LLM Selection ──────────────────────────────────────────────────────────
+let selectedProviders = null; // null = all 4
+
+function toggleLLMSelector() {
+  const panel = document.getElementById('llmSelectorPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function updateLLMSelection() {
+  const providers = ['claude','grok','openai','gemini'];
+  const selected  = providers.filter(p => document.getElementById('llm_' + p)?.checked);
+  selectedProviders = selected.length === 4 ? null : selected;
+  const note = document.getElementById('llmSelectionNote');
+  if (!selectedProviders) {
+    note.textContent = 'All 4 LLMs active';
+    note.style.color = 'var(--accent3)';
+  } else if (selectedProviders.length === 0) {
+    note.textContent = '⚠ Select at least 1 LLM';
+    note.style.color = 'var(--accent2)';
+  } else {
+    note.textContent = `${selectedProviders.length} LLM${selectedProviders.length>1?'s':''} active: ${selectedProviders.map(p=>p[0].toUpperCase()+p.slice(1)).join(', ')}`;
+    note.style.color = 'var(--accent)';
+  }
+}
+
+// ── Check Prices ────────────────────────────────────────────────────────────
+async function checkPrices() {
+  const btn = document.getElementById('btnCheckPrices');
   btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Checking...';
+
+  const statusDiv = document.getElementById('scanStatus');
+  statusDiv.classList.add('visible');
+  document.getElementById('checkPricesPanel').style.display = 'block';
+  document.getElementById('statusDetailPanel').style.display = 'none';
+
+  try {
+    const evtSource = new EventSource('/api/prices/check/stream');
+
+    evtSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'start') {
+        document.getElementById('cpTotal').textContent = data.total;
+        setProgress(`Checking prices for ${data.total} tickers...`, 5, '');
+      }
+      else if (data.type === 'tick') {
+        document.getElementById('cpCurrentTicker').textContent = data.ticker;
+        document.getElementById('cpIdx').textContent = data.idx;
+        document.getElementById('cpTotal').textContent = data.total;
+        document.getElementById('cpPrice').textContent = data.price > 0 ? '$' + data.price.toFixed(2) : 'N/A';
+        document.getElementById('cpSource').textContent = data.source;
+        document.getElementById('cpProgress').style.width = data.pct + '%';
+        setProgress(`Checking prices... ${data.idx}/${data.total}`, data.pct, '');
+      }
+      else if (data.type === 'done') {
+        evtSource.close();
+        btn.disabled = false;
+        btn.innerHTML = '💲 Check Prices';
+        setProgress(`✓ Prices updated: ${data.updated}/${data.total} tickers`, 100, `${data.failed} failed`);
+        setTimeout(() => {
+          document.getElementById('checkPricesPanel').style.display = 'none';
+          statusDiv.classList.remove('visible');
+        }, 4000);
+        loadResults(); // refresh cards with new prices
+      }
+      else if (data.type === 'error') {
+        evtSource.close();
+        btn.disabled = false;
+        btn.innerHTML = '💲 Check Prices';
+        setProgress('Price check failed: ' + data.message, 0, '');
+      }
+    };
+
+    evtSource.onerror = () => {
+      evtSource.close();
+      btn.disabled = false;
+      btn.innerHTML = '💲 Check Prices';
+    };
+
+  } catch(err) {
+    btn.disabled = false;
+    btn.innerHTML = '💲 Check Prices';
+  }
+}
+
+// ── LLM Price Consensus ─────────────────────────────────────────────────────
+async function runLLMConsensus() {
+  const btn = document.getElementById('btnLLMConsensus');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Asking LLMs...';
+
+  const statusDiv = document.getElementById('scanStatus');
+  statusDiv.classList.add('visible');
+  document.getElementById('statusDetailPanel').style.display = 'block';
+  document.getElementById('checkPricesPanel').style.display  = 'none';
+
+  // Reset detail panel for LLM consensus mode
+  document.getElementById('statusLLMRow').innerHTML =
+    '<span style="color:var(--text3)">MODE:</span> <span style="color:var(--accent)">LLM Price & SI Consensus</span> &nbsp;·&nbsp; <span style="color:var(--text3)">THRESHOLD:</span> ±1%';
+  document.getElementById('statusConsensus4').textContent = '🔥 Price ✓: 0';
+  document.getElementById('statusConsensus3').textContent = '📊 SI ✓: 0';
+  document.getElementById('statusConsensus2').textContent = '💎 Batched: 0';
+  document.getElementById('statusConsensus1').textContent = '⚪ No consensus: 0';
+  document.getElementById('statusProcessIdx').textContent = '0';
+  document.getElementById('statusProcessTotal').textContent = '—';
+  document.getElementById('statusStartTime').textContent = '—';
+  document.getElementById('statusEstEnd').textContent = '—';
+  document.getElementById('statusETA').textContent = '—';
+  document.getElementById('statusAvgTime').textContent = '~8s';
+
+  setProgress('Connecting to LLMs...', 5, 'Batching tickers — 5 per LLM call');
+
+  const llmConsensusStart = Date.now();
+  let priceOk = 0, siOk = 0, noConsensus = 0, batchesDone = 0;
+
+  try {
+    const providerParam = selectedProviders ? selectedProviders.join(',') : '';
+    const url = `/api/prices/llm_consensus/stream${providerParam ? '?providers=' + providerParam : ''}`;
+    const evtSource = new EventSource(url);
+
+    evtSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.type === 'start') {
+        const total = data.total;
+        document.getElementById('statusProcessTotal').textContent = total;
+        document.getElementById('statusStartTime').textContent   = data.start_time || '—';
+        document.getElementById('statusEstEnd').textContent      = data.est_finish || '—';
+        document.getElementById('statusETA').textContent         =
+          data.est_total_min ? `~${data.est_total_min} min` : '—';
+        setProgress(`Asking LLMs for ${total} tickers (batches of 5)...`, 8,
+          `Started: ${data.start_time || ''}`);
+      }
+      else if (data.type === 'tick') {
+        const idx   = data.idx;
+        const total = data.total;
+        const pct   = data.pct;
+
+        // Update processing row
+        document.getElementById('statusProcessIdx').textContent = idx;
+        document.getElementById('statusProcessTotal').textContent = total;
+
+        // Update timing
+        const avgSec = data.avg_sec || 8;
+        document.getElementById('statusAvgTime').textContent = `~${avgSec}s`;
+        document.getElementById('statusETA').textContent     = data.eta || '—';
+
+        // Track consensus counts
+        if (data.price_ok) priceOk++;
+        if (data.si_ok)    siOk++;
+        if (!data.price_ok && !data.si_ok) noConsensus++;
+        batchesDone = Math.ceil(idx / 5);
+
+        document.getElementById('statusConsensus4').textContent = `🔥 Price ✓: ${priceOk}`;
+        document.getElementById('statusConsensus3').textContent = `📊 SI ✓: ${siOk}`;
+        document.getElementById('statusConsensus2').textContent = `💎 Batches done: ${batchesDone}`;
+        document.getElementById('statusConsensus1').textContent = `⚪ No consensus: ${noConsensus}`;
+
+        // Build per-LLM price breakdown for the current ticker
+        const prices = data.all_prices || {};
+        const sis    = data.all_si    || {};
+        const priceStr = Object.entries(prices).map(([llm, v]) =>
+          `${llm[0].toUpperCase()+llm.slice(1)}:$${Number(v).toFixed(2)}`).join(' · ');
+        const siStr = Object.entries(sis).map(([llm, v]) =>
+          `${llm[0].toUpperCase()+llm.slice(1)}:${Number(v).toFixed(1)}%`).join(' · ');
+
+        const statusLine = `${data.ticker} — ${priceStr || 'no price'}${siStr ? ' | SI: '+siStr : ''}`;
+        setProgress(`Processing ${idx}/${total}: ${data.ticker}`, pct, statusLine);
+      }
+      else if (data.type === 'done') {
+        evtSource.close();
+        btn.disabled = false;
+        btn.innerHTML = '🤖 LLM Price Check';
+        const elapsed = Math.round((Date.now() - llmConsensusStart) / 1000);
+        setProgress(
+          `✓ LLM Consensus complete — ${data.updated_price} prices · ${data.updated_si} SI values updated`,
+          100,
+          `${data.total} tickers · ${elapsed}s elapsed · 1% threshold`
+        );
+        document.getElementById('statusConsensus4').textContent = `🔥 Price ✓: ${data.updated_price}`;
+        document.getElementById('statusConsensus3').textContent = `📊 SI ✓: ${data.updated_si}`;
+        // Render full results table from done payload rows
+        if (data.rows && data.rows.length > 0) {
+          document.getElementById('llmPriceRunsPanel').style.display = 'block';
+          document.getElementById('llmRunMeta').textContent =
+            `Run: ${data.run_id || '—'} · ${data.total} tickers · ${elapsed}s · ${data.updated_price} prices updated · ${data.updated_si} SI updated`;
+          renderLLMRunTable(data.rows);
+        }
+        // Also load run history into selector
+        loadLLMPriceRun(data.run_id);
+        setTimeout(() => {
+          document.getElementById('statusDetailPanel').style.display = 'none';
+          statusDiv.classList.remove('visible');
+        }, 4000);
+        loadResults();
+      }
+      else if (data.type === 'error') {
+        evtSource.close();
+        btn.disabled = false;
+        btn.innerHTML = '🤖 LLM Price Check';
+        setProgress('LLM consensus error: ' + data.message, 0, '');
+        document.getElementById('statusDetailPanel').style.display = 'none';
+      }
+    };
+
+    evtSource.onerror = () => {
+      evtSource.close();
+      btn.disabled = false;
+      btn.innerHTML = '🤖 LLM Price Check';
+    };
+
+  } catch(err) {
+    btn.disabled = false;
+    btn.innerHTML = '🤖 LLM Price Check';
+    setProgress('LLM consensus failed: ' + err.message, 0, '');
+  }
+}
+
+// ── Run Screen ──────────────────────────────────────────────────────────────
+async function runScreen() {
+  const btn     = document.getElementById('btnRunScreen');
+  const btnText = document.getElementById('screenBtnText');
+  btn.disabled  = true;
   btnText.innerHTML = '<span class="spinner"></span> Screening...';
 
   const statusDiv = document.getElementById('scanStatus');
   statusDiv.classList.add('visible');
+  document.getElementById('statusDetailPanel').style.display = 'block';
+  document.getElementById('checkPricesPanel').style.display = 'none';
   setProgress('Connecting to pipeline...', 5, '');
+
+  let screenStarted = Date.now();
+  let totalTickers  = 0;
+  let processed     = 0;
 
   try {
     const evtSource = new EventSource('/api/screen/stream');
@@ -1870,19 +2216,60 @@ async function runScreen() {
     evtSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
 
-      if (data.type === 'start') {
-        setProgress(`Screening ${data.ticker_count} tickers from universe`, 15, `Run ID: ${data.run_id}`);
+      if (data.type === 'llm_counts') {
+        // Per-LLM identification results
+        const counts = data.provider_counts || {};
+        const parts  = Object.entries(counts).map(([p, n]) =>
+          `${p[0].toUpperCase()+p.slice(1)}: <span style="color:var(--accent)">${n}</span>`
+        );
+        document.getElementById('statusLLMCounts').innerHTML =
+          parts.join(' &nbsp;·&nbsp; ') +
+          ` &nbsp;→&nbsp; <span style="color:var(--accent3)">Total: ${data.total}</span>`;
+
+        // Consensus breakdown
+        const c = data.consensus || {};
+        document.getElementById('statusConsensus4').textContent = `🔥 4-LLM: ${c['4_llm']||0}`;
+        document.getElementById('statusConsensus3').textContent = `⭐ 3-LLM: ${c['3_llm']||0}`;
+        document.getElementById('statusConsensus2').textContent = `💎 2-LLM: ${c['2_llm']||0}`;
+        document.getElementById('statusConsensus1').textContent = `⚪ 1-LLM: ${c['1_llm']||0}`;
+      }
+      else if (data.type === 'start') {
+        totalTickers = data.ticker_count || 0;
+        document.getElementById('statusProcessTotal').textContent = totalTickers;
+        document.getElementById('statusAvgTime').textContent = '~45s';
+        document.getElementById('statusStartTime').textContent = data.start_time || '—';
+        document.getElementById('statusEstEnd').textContent   = data.est_finish || '—';
+        document.getElementById('statusETA').textContent      =
+          data.est_total_min ? `~${data.est_total_min} min` : '—';
+        setProgress(`Screening ${totalTickers} tickers`, 15, `Run: ${data.run_id}`);
       }
       else if (data.type === 'progress') {
-        const stageProgress = { screen: 35, enrich: 65, thesis: 90 };
-        const pct = stageProgress[data.stage] || 50;
-        setProgress(data.message, pct, data.stage.toUpperCase());
+        const pct = data.pct || ({ screen: 35, enrich: 75, thesis: 90 }[data.stage] || 50);
+        setProgress(data.message, pct, data.processing || data.stage?.toUpperCase() || '');
+
+        // Update processing counter if provided
+        if (data.processing) {
+          const m = data.processing.match(/(\d+)\/(\d+)/);
+          if (m) {
+            processed = parseInt(m[1]);
+            document.getElementById('statusProcessIdx').textContent = processed;
+
+            // Recalculate avg and ETA
+            const elapsedSec = (Date.now() - screenStarted) / 1000;
+            if (processed > 0) {
+              const avgSec = Math.round(elapsedSec / processed);
+              const remSec = avgSec * (totalTickers - processed);
+              document.getElementById('statusAvgTime').textContent = `~${avgSec}s`;
+              const etaMin = Math.ceil(remSec / 60);
+              document.getElementById('statusETA').textContent = etaMin > 0 ? `~${etaMin} min` : 'almost done';
+            }
+          }
+        }
       }
       else if (data.type === 'results') {
         currentResults = data.results;
         const s = data.run_summary || {};
-        const found = data.results.length;
-        setProgress('Saving to database...', 100, `${found} candidates found`);
+        setProgress('Saving to database...', 98, `${data.results.length} candidates found`);
         renderSqueezeCards(data.results);
         updateRunStatsBanner(s);
       }
@@ -1891,18 +2278,23 @@ async function runScreen() {
         evtSource.close();
         btn.disabled = false;
         btnText.textContent = '▶ Run Screen';
-        // Update header subtitle
         const ts = s.run_at ? new Date(s.run_at + ' UTC').toLocaleString() : new Date().toLocaleString();
         document.getElementById('lastScreenTime').textContent =
           `Last run: ${ts} · ${s.candidates_found || 0} candidates · ${s.total_in_db || 0} total in DB`;
-        setTimeout(() => statusDiv.classList.remove('visible'), 3000);
-        loadRunStats(); // refresh history table
+        setProgress(`✓ Complete — ${s.candidates_found||0} candidates found`, 100,
+          `${s.new_tickers||0} new · ${s.updated_tickers||0} updated`);
+        setTimeout(() => {
+          document.getElementById('statusDetailPanel').style.display = 'none';
+          statusDiv.classList.remove('visible');
+        }, 5000);
+        loadRunStats();
       }
       else if (data.type === 'error') {
         setProgress(`Error: ${data.message}`, 0, '');
         evtSource.close();
         btn.disabled = false;
         btnText.textContent = '▶ Run Screen';
+        document.getElementById('statusDetailPanel').style.display = 'none';
       }
     };
 
@@ -1923,6 +2315,78 @@ function setProgress(stage, pct, info) {
   document.getElementById('scanStage').textContent = stage;
   document.getElementById('scanProgress').style.width = pct + '%';
   document.getElementById('scanInfo').textContent = info;
+}
+
+// ── LLM Price Runs Table ────────────────────────────────────────────────────
+
+function fmtPrice(v) {
+  if (v === null || v === undefined || v === "—" || v === 0) return '<span style="color:var(--text3)">—</span>';
+  return '$' + Number(v).toFixed(2);
+}
+function fmtSI(v) {
+  if (v === null || v === undefined || v === "—" || v === 0) return '<span style="color:var(--text3)">—</span>';
+  return Number(v).toFixed(1) + '%';
+}
+function fmtCheck(v) {
+  return v ? '<span style="color:var(--accent3)">✓</span>' : '<span style="color:var(--text3)">—</span>';
+}
+
+function renderLLMRunTable(rows) {
+  const tbody = document.getElementById('llmRunTableBody');
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:20px;color:var(--text3)">No data returned by LLMs for this run</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const rowBg = (r.price_consensus || r.si_consensus)
+      ? 'background:rgba(0,229,255,0.04)'
+      : '';
+    return `<tr style="border-bottom:1px solid var(--border);${rowBg}">
+      <td style="padding:7px 12px;font-weight:600;color:var(--accent)">${r.ticker}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtPrice(r.claude_price)}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtPrice(r.grok_price)}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtPrice(r.openai_price)}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtPrice(r.gemini_price)}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtSI(r.claude_si)}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtSI(r.grok_si)}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtSI(r.openai_si)}</td>
+      <td style="padding:7px 12px;text-align:right">${fmtSI(r.gemini_si)}</td>
+      <td style="padding:7px 12px;text-align:center">${fmtCheck(r.price_consensus)}</td>
+      <td style="padding:7px 12px;text-align:center">${fmtCheck(r.si_consensus)}</td>
+      <td style="padding:7px 12px;color:var(--text3);font-size:11px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.consensus_note || ''}">${r.consensus_note || 'No consensus'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadLLMPriceRun(runId) {
+  const url = '/api/llm_price_runs' + (runId ? '?run_id=' + runId : '');
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    // Show panel
+    document.getElementById('llmPriceRunsPanel').style.display = 'block';
+
+    // Update meta
+    const meta = data.run_id
+      ? `Run: ${data.run_id} · ${data.run_at || ''} · ${data.total || 0} tickers`
+      : 'No runs found';
+    document.getElementById('llmRunMeta').textContent = meta;
+
+    // Populate run selector dropdown
+    const sel = document.getElementById('llmRunSelect');
+    sel.innerHTML = (data.available_runs || []).map(r =>
+      `<option value="${r.run_id}" ${r.run_id === data.run_id ? 'selected' : ''}>${r.run_id} (${(r.run_at||'').slice(0,16)})</option>`
+    ).join('');
+
+    // Render table
+    renderLLMRunTable(data.rows || []);
+
+    // Scroll to table
+    document.getElementById('llmPriceRunsPanel').scrollIntoView({behavior:'smooth', block:'start'});
+  } catch(err) {
+    document.getElementById('llmRunMeta').textContent = 'Error loading: ' + err.message;
+  }
 }
 
 // ═══════════════════════════════════════════════════════

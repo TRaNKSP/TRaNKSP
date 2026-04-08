@@ -296,6 +296,23 @@ MIGRATIONS = [
         created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """,
+
+    # LLM Price/SI run details — raw values returned by each LLM per ticker
+    """
+    CREATE TABLE IF NOT EXISTS llm_price_runs (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id          TEXT NOT NULL,
+        run_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ticker          TEXT NOT NULL,
+        llm_name        TEXT NOT NULL,
+        price           REAL,
+        short_float     REAL,
+        days_to_cover   REAL,
+        price_consensus INTEGER DEFAULT 0,
+        si_consensus    INTEGER DEFAULT 0,
+        consensus_note  TEXT
+    )
+    """,
 ]
 
 
@@ -357,6 +374,10 @@ def run_migrations():
     # llm_daily_suggestions — in case table exists without catalyst_type
     _add_col(cursor, "llm_daily_suggestions", "catalyst_type", "TEXT")
     _add_col(cursor, "llm_daily_suggestions", "squeeze_score", "REAL")
+
+    # squeeze_results — LLM price/SI consensus notes (new in this patch)
+    _add_col(cursor, "squeeze_results", "price_consensus_note", "TEXT")
+    _add_col(cursor, "squeeze_results", "si_consensus_note",    "TEXT")
 
     conn.commit()
     conn.close()

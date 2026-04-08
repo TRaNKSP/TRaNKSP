@@ -52,6 +52,14 @@ if not exist .env (
         echo # Google Gemini       →  https://aistudio.google.com/app/apikey  (use GOOGLE_API_KEY)
         echo GOOGLE_API_KEY=
         echo.
+        echo # ── OPTIONAL: Financial Datasets  ─────────────────────────────────────
+        echo # Paid API for fundamentals enrichment (income stmt, balance sheet, cash flow,
+        echo # real-time prices, company news). Supplements Yahoo Finance SI data.
+        echo # Sign up: https://financialdatasets.ai  — add paid API key below.
+        echo # On free tier set FD_CALL_DELAY=13 in .env to respect 5 req/min limit.
+        echo FINANCIAL_DATASETS_API_KEY=
+        echo FD_CALL_DELAY=1
+        echo.
         echo # ── OPTIONAL: Short interest fallback ─────────────────────────────────
         echo # Finnhub free tier (60 req/min)  →  https://finnhub.io/dashboard
         echo FINNHUB_API_KEY=
